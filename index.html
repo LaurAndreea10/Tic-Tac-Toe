@@ -1,0 +1,2902 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+  <meta charset="UTF-8" />
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1, viewport-fit=cover"
+  />
+  <title>Tic Tac Toe Ultimate</title>
+  <style>
+    :root {
+      --bg: #0b1020;
+      --bg-2: #131b31;
+      --panel: rgba(19, 27, 49, 0.72);
+      --panel-2: rgba(27, 37, 66, 0.92);
+      --panel-solid: #17213a;
+      --border: rgba(255,255,255,.09);
+      --text: #eef2ff;
+      --muted: #9ca8cc;
+      --accent: #7c6aff;
+      --accent-2: #ff6ab0;
+      --x-color: #9388ff;
+      --o-color: #ff7ebd;
+      --success: #4ade80;
+      --warning: #fbbf24;
+      --danger: #fb7185;
+      --shadow: 0 24px 80px rgba(0,0,0,.36);
+      --radius-xl: 28px;
+      --radius-lg: 18px;
+      --cell-size: clamp(72px, 21vw, 92px);
+      --font-ui: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      --font-display: ui-rounded, "Avenir Next", "Trebuchet MS", sans-serif;
+      --board-glow: rgba(124,106,255,.18);
+      --safe-bottom: max(16px, env(safe-area-inset-bottom));
+    }
+
+    body[data-theme="light"] {
+      --bg: #edf3ff;
+      --bg-2: #dde7ff;
+      --panel: rgba(255,255,255,.72);
+      --panel-2: rgba(255,255,255,.95);
+      --panel-solid: #ffffff;
+      --border: rgba(42, 57, 99, .12);
+      --text: #1d2744;
+      --muted: #6d7c9f;
+      --shadow: 0 24px 70px rgba(42, 57, 99, .12);
+      --board-glow: rgba(124,106,255,.12);
+    }
+
+    body[data-theme="neon"] {
+      --bg: #05080f;
+      --bg-2: #09111b;
+      --panel: rgba(6, 12, 20, .75);
+      --panel-2: rgba(12, 19, 31, .96);
+      --panel-solid: #0c1524;
+      --border: rgba(0,255,255,.12);
+      --text: #eafcff;
+      --muted: #7fbccc;
+      --accent: #00f0ff;
+      --accent-2: #ff00b8;
+      --x-color: #00f0ff;
+      --o-color: #ff55cc;
+      --board-glow: rgba(0,240,255,.18);
+    }
+
+    body[data-theme="retro"] {
+      --bg: #1d1208;
+      --bg-2: #2a1a0d;
+      --panel: rgba(43, 27, 14, .78);
+      --panel-2: rgba(53, 33, 18, .95);
+      --panel-solid: #3a2415;
+      --border: rgba(255,214,153,.12);
+      --text: #fff1d6;
+      --muted: #d8b88e;
+      --accent: #ffb347;
+      --accent-2: #ff6f61;
+      --x-color: #ffd166;
+      --o-color: #ff8f70;
+      --board-glow: rgba(255,179,71,.18);
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+
+    body {
+      min-height: 100vh;
+      font-family: var(--font-ui);
+      color: var(--text);
+      background:
+        radial-gradient(circle at 10% 10%, color-mix(in srgb, var(--accent) 18%, transparent), transparent 25%),
+        radial-gradient(circle at 85% 85%, color-mix(in srgb, var(--accent-2) 14%, transparent), transparent 25%),
+        linear-gradient(180deg, var(--bg), var(--bg-2));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow-x: hidden;
+      transition: background .3s ease, color .3s ease;
+    }
+
+    body::before,
+    body::after {
+      content: "";
+      position: fixed;
+      width: 280px;
+      height: 280px;
+      border-radius: 50%;
+      filter: blur(72px);
+      pointer-events: none;
+      z-index: 0;
+      opacity: .8;
+      animation: drift 11s ease-in-out infinite alternate;
+    }
+
+    body::before {
+      left: -90px;
+      top: -110px;
+      background: color-mix(in srgb, var(--accent) 20%, transparent);
+    }
+
+    body::after {
+      right: -90px;
+      bottom: -120px;
+      background: color-mix(in srgb, var(--accent-2) 16%, transparent);
+      animation-direction: alternate-reverse;
+      animation-duration: 13s;
+    }
+
+    @keyframes drift {
+      from { transform: translate(0,0) scale(1); }
+      to { transform: translate(30px,18px) scale(1.08); }
+    }
+
+    .app {
+      width: min(100%, 1180px);
+      padding: 14px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .screen {
+      display: none;
+      opacity: 0;
+      transform: translateY(10px);
+      transition: opacity .25s ease, transform .25s ease;
+    }
+
+    .screen.active {
+      display: block;
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .shell {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      backdrop-filter: blur(16px);
+      border-radius: var(--radius-xl);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .splash {
+      min-height: 420px;
+      display: grid;
+      place-items: center;
+      padding: 32px;
+      text-align: center;
+    }
+
+    .splash-logo {
+      font-family: var(--font-display);
+      font-weight: 900;
+      font-size: clamp(2.4rem, 10vw, 5rem);
+      letter-spacing: -.06em;
+      margin-bottom: 12px;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      animation: pulse 1.4s ease-in-out infinite alternate;
+    }
+
+    @keyframes pulse {
+      from { transform: scale(1); }
+      to { transform: scale(1.03); }
+    }
+
+    .tiny-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      width: 100px;
+      margin: 18px auto;
+    }
+
+    .tiny-grid span {
+      width: 28px;
+      height: 28px;
+      border-radius: 10px;
+      opacity: 0;
+      transform: scale(.6);
+      animation: tinyIn .38s ease forwards;
+    }
+
+    .tiny-grid span:nth-child(odd) { background: var(--accent); }
+    .tiny-grid span:nth-child(even){ background: var(--accent-2); }
+    .tiny-grid span:nth-child(1){animation-delay:.06s}
+    .tiny-grid span:nth-child(2){animation-delay:.12s}
+    .tiny-grid span:nth-child(3){animation-delay:.18s}
+    .tiny-grid span:nth-child(4){animation-delay:.24s}
+    .tiny-grid span:nth-child(5){animation-delay:.30s}
+    .tiny-grid span:nth-child(6){animation-delay:.36s}
+    .tiny-grid span:nth-child(7){animation-delay:.42s}
+    .tiny-grid span:nth-child(8){animation-delay:.48s}
+    .tiny-grid span:nth-child(9){animation-delay:.54s}
+
+    @keyframes tinyIn {
+      to { opacity: 1; transform: scale(1); }
+    }
+
+    .title {
+      margin: 0 0 8px;
+      font-family: var(--font-display);
+      font-size: clamp(1.6rem, 4vw, 2.5rem);
+      font-weight: 900;
+      letter-spacing: -.04em;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+
+    .subtitle {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.55;
+      font-size: .96rem;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 380px 1fr;
+      min-height: 760px;
+    }
+
+    .sidebar {
+      padding: 22px;
+      border-right: 1px solid var(--border);
+      background: linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,.01));
+    }
+
+    .main {
+      padding: 22px;
+      display: grid;
+      grid-template-rows: auto auto auto 1fr auto;
+      gap: 14px;
+    }
+
+    .stack { display: grid; gap: 16px; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+    .section-label {
+      display: block;
+      margin-bottom: 8px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .12em;
+      font-size: .72rem;
+      font-weight: 800;
+    }
+
+    .card {
+      background: var(--panel-2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 14px;
+    }
+
+    .option-group {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .pill {
+      flex: 1;
+      min-width: 120px;
+      border: 1px solid var(--border);
+      background: var(--panel-solid);
+      color: var(--muted);
+      border-radius: 12px;
+      padding: 12px 14px;
+      text-align: center;
+      cursor: pointer;
+      font-weight: 800;
+      transition: .2s ease;
+      min-height: 48px;
+    }
+
+    .pill:hover {
+      border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+      color: var(--text);
+      transform: translateY(-1px);
+    }
+
+    .pill.active {
+      color: var(--text);
+      border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+      background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 14%, transparent), color-mix(in srgb, var(--accent-2) 6%, transparent)), var(--panel-solid);
+    }
+
+    select, input {
+      width: 100%;
+      border: 1px solid var(--border);
+      background: var(--panel-solid);
+      color: var(--text);
+      border-radius: 12px;
+      padding: 13px 14px;
+      font: inherit;
+      font-size: 16px;
+      outline: none;
+      transition: .2s ease;
+      min-height: 48px;
+    }
+
+    select:focus,
+    input:focus {
+      border-color: color-mix(in srgb, var(--accent) 60%, transparent);
+      box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 14%, transparent);
+    }
+
+    .btn {
+      border: 0;
+      border-radius: 12px;
+      padding: 12px 16px;
+      font: inherit;
+      font-weight: 900;
+      cursor: pointer;
+      transition: .2s ease;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      min-height: 48px;
+      text-align: center;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      color: white;
+      box-shadow: 0 10px 26px color-mix(in srgb, var(--accent) 24%, transparent);
+    }
+
+    .btn-primary:hover { transform: translateY(-1px); }
+
+    .btn-secondary {
+      background: var(--panel-solid);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+
+    .btn-danger {
+      background: rgba(251,113,133,.1);
+      color: #ffd0da;
+      border: 1px solid rgba(251,113,133,.18);
+    }
+
+    .btn-full { width: 100%; }
+
+    .btn:focus-visible,
+    .pill:focus-visible,
+    .icon-btn:focus-visible,
+    .cell:focus-visible,
+    select:focus-visible,
+    input:focus-visible {
+      outline: 3px solid color-mix(in srgb, var(--accent) 45%, transparent);
+      outline-offset: 2px;
+    }
+
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .icon-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .icon-btn {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: var(--panel-solid);
+      color: var(--text);
+      cursor: pointer;
+      transition: .2s ease;
+      font-size: 1rem;
+      flex: 0 0 auto;
+    }
+
+    .icon-btn:hover {
+      transform: translateY(-1px);
+      border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+    }
+
+    .icon-btn.muted { opacity: .5; }
+
+    .turnbar {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      gap: 14px;
+      align-items: center;
+    }
+
+    .player-chip {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--muted);
+      transition: .2s ease;
+      min-width: 0;
+    }
+
+    .player-chip.right {
+      justify-content: flex-end;
+      text-align: right;
+    }
+
+    .player-chip.active { color: var(--text); }
+
+    .badge {
+      width: 38px;
+      height: 38px;
+      border-radius: 12px;
+      display: grid;
+      place-items: center;
+      font-weight: 900;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,.03);
+      flex-shrink: 0;
+    }
+
+    .player-chip.active .badge.x {
+      background: color-mix(in srgb, var(--x-color) 18%, transparent);
+      color: var(--x-color);
+      box-shadow: 0 0 18px color-mix(in srgb, var(--x-color) 12%, transparent);
+    }
+
+    .player-chip.active .badge.o {
+      background: color-mix(in srgb, var(--o-color) 18%, transparent);
+      color: var(--o-color);
+      box-shadow: 0 0 18px color-mix(in srgb, var(--o-color) 12%, transparent);
+    }
+
+    .player-meta {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 0;
+    }
+
+    .player-name {
+      font-weight: 900;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .player-sub {
+      font-size: .78rem;
+      color: var(--muted);
+    }
+
+    .timer {
+      min-width: 96px;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .timer.show { display: flex; }
+
+    .timer-value {
+      font-family: var(--font-display);
+      font-size: 1.2rem;
+      font-weight: 900;
+      min-width: 34px;
+      text-align: center;
+    }
+
+    .timer-value.urgent {
+      color: var(--danger);
+      animation: beat .45s ease infinite alternate;
+    }
+
+    @keyframes beat {
+      from { transform: scale(1); }
+      to { transform: scale(1.08); }
+    }
+
+    .timer-track {
+      width: 92px;
+      height: 6px;
+      border-radius: 999px;
+      background: rgba(255,255,255,.08);
+      overflow: hidden;
+    }
+
+    .timer-fill {
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent), var(--accent-2));
+      transition: width .15s linear;
+    }
+
+    .timer-fill.urgent {
+      background: linear-gradient(90deg, #fb7185, #f97316);
+    }
+
+    .board-area {
+      display: grid;
+      justify-items: center;
+      align-content: start;
+      gap: 14px;
+    }
+
+    .board-shell {
+      position: relative;
+      padding: 10px;
+      border-radius: 30px;
+      box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 10%, transparent), 0 0 40px var(--board-glow);
+      max-width: 100%;
+    }
+
+    .board {
+      display: grid;
+      grid-template-columns: repeat(3, var(--cell-size));
+      gap: 10px;
+      max-width: 100%;
+    }
+
+    .cell {
+      width: var(--cell-size);
+      height: var(--cell-size);
+      border-radius: 20px;
+      border: 1px solid var(--border);
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.01)),
+        var(--panel-solid);
+      color: var(--text);
+      font-family: var(--font-display);
+      font-size: clamp(1.5rem, 5vw, 2rem);
+      font-weight: 900;
+      cursor: pointer;
+      transition: transform .15s ease, border-color .2s ease, box-shadow .2s ease, background .2s ease;
+      position: relative;
+      overflow: hidden;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .cell:hover:not(:disabled) {
+      transform: translateY(-1px) scale(1.02);
+      border-color: color-mix(in srgb, var(--accent) 34%, transparent);
+      box-shadow: 0 10px 22px color-mix(in srgb, var(--accent) 8%, transparent);
+    }
+
+    .cell:disabled { cursor: default; }
+    .cell.x-mark { color: var(--x-color); }
+    .cell.o-mark { color: var(--o-color); }
+
+    .cell.last::after {
+      content: "";
+      position: absolute;
+      inset: 8px;
+      border: 1px dashed rgba(255,255,255,.12);
+      border-radius: 13px;
+      pointer-events: none;
+    }
+
+    .cell.preview-x::before,
+    .cell.preview-o::before {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      opacity: .25;
+      font-family: var(--font-display);
+      font-size: clamp(1.4rem, 4vw, 1.8rem);
+      font-weight: 900;
+      pointer-events: none;
+    }
+
+    .cell.preview-x::before {
+      content: attr(data-preview-x);
+      color: var(--x-color);
+    }
+
+    .cell.preview-o::before {
+      content: attr(data-preview-o);
+      color: var(--o-color);
+    }
+
+    .cell.hint {
+      border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+      box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 20%, transparent), 0 0 24px color-mix(in srgb, var(--accent) 18%, transparent);
+    }
+
+    .cell.hint::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(circle at center, color-mix(in srgb, var(--accent) 14%, transparent), transparent 62%);
+      pointer-events: none;
+    }
+
+    .cell.win {
+      border-color: color-mix(in srgb, var(--accent) 50%, transparent);
+      background:
+        linear-gradient(180deg, color-mix(in srgb, var(--accent) 16%, transparent), color-mix(in srgb, var(--accent) 6%, transparent)),
+        var(--panel-solid);
+      box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 12%, transparent), 0 0 26px color-mix(in srgb, var(--accent) 14%, transparent);
+      animation: winPop .4s cubic-bezier(.2,.8,.2,1);
+    }
+
+    .cell.win.o-line {
+      border-color: color-mix(in srgb, var(--o-color) 50%, transparent);
+      background:
+        linear-gradient(180deg, color-mix(in srgb, var(--o-color) 16%, transparent), color-mix(in srgb, var(--o-color) 6%, transparent)),
+        var(--panel-solid);
+      box-shadow: 0 0 0 1px color-mix(in srgb, var(--o-color) 10%, transparent), 0 0 26px color-mix(in srgb, var(--o-color) 14%, transparent);
+    }
+
+    @keyframes winPop {
+      0% { transform: scale(1); }
+      40% { transform: scale(1.09); }
+      100% { transform: scale(1.03); }
+    }
+
+    .cell.pop { animation: pop .22s cubic-bezier(.2,.8,.2,1); }
+
+    @keyframes pop {
+      from { transform: scale(.72); opacity: .55; }
+      to { transform: scale(1); opacity: 1; }
+    }
+
+    .status {
+      min-height: 26px;
+      text-align: center;
+      font-family: var(--font-display);
+      font-weight: 900;
+      font-size: 1rem;
+    }
+
+    .status.x { color: var(--x-color); }
+    .status.o { color: var(--o-color); }
+    .status.warn { color: var(--warning); }
+    .status.muted { color: var(--muted); }
+    .status.success { color: var(--success); }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+    }
+
+    .stat {
+      background: var(--panel-2);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 14px;
+      text-align: center;
+    }
+
+    .stat-label {
+      color: var(--muted);
+      font-size: .72rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: .1em;
+      margin-bottom: 6px;
+    }
+
+    .stat-value {
+      font-family: var(--font-display);
+      font-size: 1.55rem;
+      font-weight: 900;
+    }
+
+    .stat.x .stat-value { color: var(--x-color); }
+    .stat.o .stat-value { color: var(--o-color); }
+
+    .mini-stats {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+    }
+
+    .mini-stat {
+      background: var(--panel-2);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 12px;
+    }
+
+    .mini-stat .k {
+      color: var(--muted);
+      font-size: .75rem;
+      margin-bottom: 5px;
+      font-weight: 700;
+    }
+
+    .mini-stat .v {
+      font-weight: 900;
+      font-size: 1rem;
+    }
+
+    .footer-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      padding-bottom: 2px;
+    }
+
+    .footer-actions .btn {
+      flex: 1 1 150px;
+    }
+
+    .history-list {
+      display: grid;
+      gap: 10px;
+      max-height: 530px;
+      overflow: auto;
+      padding-right: 4px;
+    }
+
+    .history-item {
+      display: flex;
+      justify-content: space-between;
+      gap: 14px;
+      background: var(--panel-2);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 14px;
+      animation: rowIn .22s ease;
+    }
+
+    @keyframes rowIn {
+      from { opacity: 0; transform: translateX(-8px); }
+      to { opacity: 1; transform: translateX(0); }
+    }
+
+    .history-result {
+      font-family: var(--font-display);
+      font-weight: 900;
+      margin-bottom: 4px;
+    }
+
+    .history-result.x { color: var(--x-color); }
+    .history-result.o { color: var(--o-color); }
+    .history-result.d { color: var(--text); }
+
+    .history-meta {
+      color: var(--muted);
+      font-size: .78rem;
+      line-height: 1.45;
+    }
+
+    .empty {
+      border: 1px dashed var(--border);
+      border-radius: 16px;
+      padding: 30px;
+      text-align: center;
+      color: var(--muted);
+      background: rgba(255,255,255,.02);
+    }
+
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(8, 12, 22, .7);
+      backdrop-filter: blur(8px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      z-index: 40;
+    }
+
+    .modal-overlay.show { display: flex; }
+
+    .modal {
+      width: min(100%, 440px);
+      border-radius: 28px;
+      padding: 24px;
+      border: 1px solid var(--border);
+      background: var(--panel-2);
+      box-shadow: var(--shadow);
+      text-align: center;
+      animation: modalIn .2s ease;
+    }
+
+    .modal.large { width: min(100%, 540px); }
+
+    @keyframes modalIn {
+      from { opacity: 0; transform: scale(.94); }
+      to { opacity: 1; transform: scale(1); }
+    }
+
+    .modal-emoji {
+      font-size: 3rem;
+      margin-bottom: 10px;
+    }
+
+    .modal-title {
+      font-family: var(--font-display);
+      font-size: 1.6rem;
+      font-weight: 900;
+      margin-bottom: 8px;
+    }
+
+    .modal-sub {
+      color: var(--muted);
+      line-height: 1.5;
+      margin-bottom: 18px;
+      font-size: .95rem;
+    }
+
+    .modal-actions {
+      display: flex;
+      gap: 10px;
+    }
+
+    .trophy {
+      width: 88px;
+      height: 88px;
+      margin: 0 auto 14px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      font-size: 2rem;
+      background: radial-gradient(circle at center, color-mix(in srgb, var(--warning) 28%, transparent), transparent 70%);
+    }
+
+    .confetti {
+      position: fixed;
+      width: 8px;
+      height: 8px;
+      pointer-events: none;
+      z-index: 50;
+      animation: fall 1.2s ease-in forwards;
+    }
+
+    @keyframes fall {
+      from { transform: translateY(0) rotate(0deg); opacity: 1; }
+      to { transform: translateY(260px) rotate(720deg); opacity: 0; }
+    }
+
+    .sr-only {
+      position: absolute !important;
+      width: 1px !important;
+      height: 1px !important;
+      margin: -1px !important;
+      padding: 0 !important;
+      overflow: hidden !important;
+      clip: rect(0, 0, 0, 0) !important;
+      white-space: nowrap !important;
+      border: 0 !important;
+    }
+
+    @media (max-width: 980px) {
+      .layout { grid-template-columns: 1fr; }
+      .sidebar { border-right: 0; border-bottom: 1px solid var(--border); }
+      .main { grid-template-rows: auto auto auto auto auto; }
+    }
+
+    @media (max-width: 680px) {
+      .app {
+        padding: 10px 10px calc(var(--safe-bottom) + 10px);
+      }
+
+      .shell {
+        border-radius: 22px;
+      }
+
+      .sidebar, .main {
+        padding: 16px;
+      }
+
+      .grid-2,
+      .mini-stats,
+      .stats-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .turnbar {
+        grid-template-columns: 1fr;
+      }
+
+      .player-chip.right {
+        justify-content: flex-start;
+        text-align: left;
+      }
+
+      .timer {
+        justify-self: center;
+      }
+
+      .modal-actions,
+      .footer-actions {
+        flex-direction: column;
+      }
+
+      .footer-actions .btn {
+        flex: 1 1 auto;
+        width: 100%;
+      }
+
+      .history-item {
+        flex-direction: column;
+      }
+
+      .board-shell {
+        padding: 8px;
+      }
+
+      .board {
+        gap: 8px;
+      }
+
+      .cell {
+        border-radius: 18px;
+      }
+
+      .topbar {
+        align-items: flex-start;
+      }
+    }
+
+    @media (max-width: 380px) {
+      :root {
+        --cell-size: clamp(64px, 24vw, 72px);
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation: none !important;
+        transition: none !important;
+      }
+    }
+  </style>
+</head>
+<body data-theme="dark">
+  <div class="app">
+    <section id="screenSplash" class="screen active">
+      <div class="shell splash">
+        <div>
+          <div class="splash-logo">TTT ULTIMATE</div>
+          <div class="tiny-grid" aria-hidden="true">
+            <span></span><span></span><span></span>
+            <span></span><span></span><span></span>
+            <span></span><span></span><span></span>
+          </div>
+          <p class="subtitle" data-i18n="loading">Se încarcă varianta completă...</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="screenStart" class="screen">
+      <div class="shell layout">
+        <aside class="sidebar">
+          <div class="topbar" style="margin-bottom:12px">
+            <div>
+              <h1 class="title" data-i18n="gameTitle">Tic Tac Toe</h1>
+              <p class="subtitle" data-i18n="gameSubtitle">Versiune completă cu teme, statistici, hint, undo, nume personalizate și final de serie.</p>
+            </div>
+            <div style="min-width:120px">
+              <label class="section-label" for="languageSelect" data-i18n="language">Limbă</label>
+              <select id="languageSelect">
+                <option value="ro">🇷🇴 Română</option>
+                <option value="en">🇬🇧 English</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="stack">
+            <div>
+              <label class="section-label" data-i18n="gameMode">Mod joc</label>
+              <div class="option-group" id="modeGroup">
+                <button type="button" class="pill active" data-value="ai" data-i18n="modeAi">🤖 vs AI</button>
+                <button type="button" class="pill" data-value="pvp" data-i18n="modePvp">👥 2 jucători</button>
+              </div>
+            </div>
+
+            <div id="difficultyWrap">
+              <label class="section-label" for="difficultySelect" data-i18n="aiDifficulty">Dificultate AI</label>
+              <select id="difficultySelect"></select>
+            </div>
+
+            <div id="namesWrap" class="grid-2" style="display:none">
+              <div>
+                <label class="section-label" for="player1Input" data-i18n="player1Name">Nume P1</label>
+                <input id="player1Input" maxlength="16" />
+              </div>
+              <div>
+                <label class="section-label" for="player2Input" data-i18n="player2Name">Nume P2</label>
+                <input id="player2Input" maxlength="16" />
+              </div>
+            </div>
+
+            <div class="grid-2">
+              <div>
+                <label class="section-label" for="symbolSelect" data-i18n="symbols">Simboluri</label>
+                <select id="symbolSelect">
+                  <option value="XO">X / O</option>
+                  <option value="catmouse">🐱 / 🐭</option>
+                  <option value="love">❤️ / 💔</option>
+                  <option value="sunmoon">☀️ / 🌙</option>
+                </select>
+              </div>
+              <div>
+                <label class="section-label" for="themeSelect" data-i18n="theme">Temă</label>
+                <select id="themeSelect"></select>
+              </div>
+            </div>
+
+            <div class="grid-2">
+              <div>
+                <label class="section-label" for="timerSelect" data-i18n="turnTimer">Timer pe tur</label>
+                <select id="timerSelect"></select>
+              </div>
+              <div>
+                <label class="section-label" for="timeoutSelect" data-i18n="onTimeout">La timeout</label>
+                <select id="timeoutSelect"></select>
+              </div>
+            </div>
+
+            <div class="grid-2">
+              <div>
+                <label class="section-label" for="starterSelect" data-i18n="whoStarts">Cine începe</label>
+                <select id="starterSelect"></select>
+              </div>
+              <div>
+                <label class="section-label" for="seriesSelect" data-i18n="series">Serie</label>
+                <select id="seriesSelect"></select>
+              </div>
+            </div>
+
+            <div>
+              <label class="section-label" data-i18n="sound">Sunet</label>
+              <div class="option-group" id="soundGroup">
+                <button type="button" class="pill active" data-value="on" data-i18n="soundOn">🔊 Pornit</button>
+                <button type="button" class="pill" data-value="off" data-i18n="soundOff">🔇 Oprit</button>
+              </div>
+            </div>
+
+            <button class="btn btn-primary btn-full" id="startGameBtn" data-i18n="startGame">▶ Începe jocul</button>
+          </div>
+        </aside>
+
+        <main class="main">
+          <div class="topbar">
+            <div>
+              <h2 class="title" style="font-size:1.5rem; margin-bottom:4px" data-i18n="previewStats">Preview & statistici</h2>
+              <p class="subtitle" data-i18n="savedSeparately">Scorurile și setările sunt salvate separat pe configurație.</p>
+            </div>
+            <div class="icon-row">
+              <button class="icon-btn" id="previewThemeBtn" title="Theme">🌓</button>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="section-label" data-i18n="currentConfig">Config curent</div>
+            <div id="previewSummary" class="subtitle"></div>
+          </div>
+
+          <div class="stats-grid">
+            <div class="stat x">
+              <div class="stat-label" data-i18n="winsX">Victorii X</div>
+              <div class="stat-value" id="previewXWins">0</div>
+            </div>
+            <div class="stat">
+              <div class="stat-label" data-i18n="draws">Remize</div>
+              <div class="stat-value" id="previewDraws">0</div>
+            </div>
+            <div class="stat o">
+              <div class="stat-label" data-i18n="winsO">Victorii O</div>
+              <div class="stat-value" id="previewOWins">0</div>
+            </div>
+          </div>
+
+          <div class="mini-stats">
+            <div class="mini-stat">
+              <div class="k" data-i18n="totalRounds">Total runde</div>
+              <div class="v" id="previewTotalRounds">0</div>
+            </div>
+            <div class="mini-stat">
+              <div class="k" data-i18n="winRateX">Win rate X</div>
+              <div class="v" id="previewXRate">0%</div>
+            </div>
+            <div class="mini-stat">
+              <div class="k" data-i18n="winRateO">Win rate O</div>
+              <div class="v" id="previewORate">0%</div>
+            </div>
+            <div class="mini-stat">
+              <div class="k" data-i18n="lastResult">Ultimul rezultat</div>
+              <div class="v" id="previewLastResult">—</div>
+            </div>
+            <div class="mini-stat">
+              <div class="k" data-i18n="timeouts">Timeout-uri</div>
+              <div class="v" id="previewTimeouts">0</div>
+            </div>
+            <div class="mini-stat">
+              <div class="k" data-i18n="vsAiRate">Win rate vs AI</div>
+              <div class="v" id="previewVsAiRate">0%</div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="section-label" data-i18n="extras">Ce are în plus</div>
+            <p class="subtitle" style="margin:0" data-i18n="extrasDesc">
+              Final de serie, hint opțional, undo, nume personalizate PvP, teme reale, statistici extinse și feedback mai rafinat.
+            </p>
+          </div>
+        </main>
+      </div>
+    </section>
+
+    <section id="screenGame" class="screen">
+      <div class="shell layout">
+        <aside class="sidebar">
+          <div class="topbar" style="margin-bottom:14px">
+            <div>
+              <h1 class="title" style="font-size:1.7rem; margin-bottom:4px" data-i18n="match">Meci</h1>
+              <p class="subtitle" id="configSummary"></p>
+            </div>
+            <div class="icon-row">
+              <button class="icon-btn" id="soundBtn" title="Sound">🔊</button>
+              <button class="icon-btn" id="themeBtn" title="Theme">🌓</button>
+              <button class="icon-btn" id="historyBtn" title="History">📋</button>
+              <button class="icon-btn" id="menuBtn" title="Menu">⚙️</button>
+            </div>
+          </div>
+
+          <div class="card" style="margin-bottom:12px">
+            <div class="turnbar">
+              <div class="player-chip" id="playerXPanel">
+                <div class="badge x" id="symbolX">X</div>
+                <div class="player-meta">
+                  <div class="player-name" id="playerXName">Tu</div>
+                  <div class="player-sub" id="playerXSub">gata</div>
+                </div>
+              </div>
+
+              <div class="timer" id="timerBox">
+                <div class="timer-value" id="timerValue">15</div>
+                <div class="timer-track"><div class="timer-fill" id="timerFill"></div></div>
+              </div>
+
+              <div class="player-chip right" id="playerOPanel">
+                <div class="player-meta">
+                  <div class="player-name" id="playerOName">AI</div>
+                  <div class="player-sub" id="playerOSub">așteaptă</div>
+                </div>
+                <div class="badge o" id="symbolO">O</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="stats-grid" style="margin-bottom:12px">
+            <div class="stat x">
+              <div class="stat-label" id="scoreXLabel">Tu</div>
+              <div class="stat-value" id="scoreX">0</div>
+            </div>
+            <div class="stat">
+              <div class="stat-label" data-i18n="draws">Remize</div>
+              <div class="stat-value" id="scoreDraw">0</div>
+            </div>
+            <div class="stat o">
+              <div class="stat-label" id="scoreOLabel">AI</div>
+              <div class="stat-value" id="scoreO">0</div>
+            </div>
+          </div>
+
+          <div class="mini-stats" style="margin-bottom:12px">
+            <div class="mini-stat">
+              <div class="k" data-i18n="round">Runda</div>
+              <div class="v" id="seriesInfo">1 / 1</div>
+            </div>
+            <div class="mini-stat">
+              <div class="k" data-i18n="whoStarted">Cine a început</div>
+              <div class="v" id="starterInfo">X</div>
+            </div>
+            <div class="mini-stat">
+              <div class="k" data-i18n="movesThisRound">Mutări în rundă</div>
+              <div class="v" id="movesInfo">0</div>
+            </div>
+            <div class="mini-stat">
+              <div class="k" data-i18n="roundEnd">Final rundă</div>
+              <div class="v" id="endReasonInfo">—</div>
+            </div>
+            <div class="mini-stat">
+              <div class="k" data-i18n="hintsUsed">Hint-uri folosite</div>
+              <div class="v" id="hintsInfo">0</div>
+            </div>
+            <div class="mini-stat">
+              <div class="k" data-i18n="undosUsed">Undo-uri</div>
+              <div class="v" id="undosInfo">0</div>
+            </div>
+          </div>
+
+          <div class="footer-actions">
+            <button class="btn btn-secondary" id="hintBtn" data-i18n="hintBtn">💡 Hint</button>
+            <button class="btn btn-secondary" id="undoBtn" data-i18n="undoBtn">↩ Undo</button>
+            <button class="btn btn-danger" id="resetScoresBtn" data-i18n="resetScore">Reset scor</button>
+            <button class="btn btn-secondary" id="newRoundBtn" data-i18n="newRound">↺ Rundă nouă</button>
+            <button class="btn btn-primary" id="newMatchBtn" data-i18n="newMatch">🏁 Meci nou</button>
+          </div>
+        </aside>
+
+        <main class="main">
+          <div class="board-area">
+            <div id="status" class="status muted" aria-live="polite"></div>
+            <div id="a11yLive" class="sr-only" aria-live="polite"></div>
+
+            <div class="board-shell">
+              <div class="board" id="board" role="grid" aria-label="Game board">
+                <button class="cell" type="button" data-idx="0" role="gridcell"></button>
+                <button class="cell" type="button" data-idx="1" role="gridcell"></button>
+                <button class="cell" type="button" data-idx="2" role="gridcell"></button>
+                <button class="cell" type="button" data-idx="3" role="gridcell"></button>
+                <button class="cell" type="button" data-idx="4" role="gridcell"></button>
+                <button class="cell" type="button" data-idx="5" role="gridcell"></button>
+                <button class="cell" type="button" data-idx="6" role="gridcell"></button>
+                <button class="cell" type="button" data-idx="7" role="gridcell"></button>
+                <button class="cell" type="button" data-idx="8" role="gridcell"></button>
+              </div>
+            </div>
+
+            <div class="card" style="width:min(100%, 460px)">
+              <div class="section-label" data-i18n="controlsFeedback">Control & feedback</div>
+              <p class="subtitle" style="margin:0" data-i18n="controlsDesc">
+                Săgeți pentru navigare, Enter/Space pentru mutare. Hover-ul arată preview discret. Pe mobil, win și timeout încearcă vibrație dacă browserul permite.
+              </p>
+            </div>
+          </div>
+        </main>
+      </div>
+    </section>
+
+    <section id="screenHistory" class="screen">
+      <div class="shell" style="padding:24px">
+        <div class="topbar" style="margin-bottom:16px">
+          <div>
+            <h1 class="title" style="font-size:1.7rem; margin-bottom:4px" data-i18n="history">Istoric</h1>
+            <p class="subtitle" data-i18n="historySaved">Rezultatele meciurilor și seriilor sunt salvate local.</p>
+          </div>
+          <div class="icon-row">
+            <button class="btn btn-danger" id="clearHistoryBtn" data-i18n="clear">Șterge</button>
+            <button class="btn btn-secondary" id="backFromHistoryBtn" data-i18n="back">Înapoi</button>
+          </div>
+        </div>
+        <div class="history-list" id="historyList"></div>
+      </div>
+    </section>
+  </div>
+
+  <div class="modal-overlay" id="resultModal" aria-hidden="true">
+    <div class="modal" id="resultModalBox" role="dialog" aria-modal="true">
+      <div id="modalDynamic"></div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" id="modalMenuBtn" data-i18n="menu">Meniu</button>
+        <button class="btn btn-primary" id="modalContinueBtn" data-i18n="continue">Continuă</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (() => {
+      "use strict";
+
+      const I18N = {
+        ro: {
+          language: "Limbă",
+          loading: "Se încarcă varianta completă...",
+          gameTitle: "Tic Tac Toe",
+          gameSubtitle: "Versiune completă cu teme, statistici, hint, undo, nume personalizate și final de serie.",
+          gameMode: "Mod joc",
+          modeAi: "🤖 vs AI",
+          modePvp: "👥 2 jucători",
+          aiDifficulty: "Dificultate AI",
+          player1Name: "Nume P1",
+          player2Name: "Nume P2",
+          player1Placeholder: "Jucător 1",
+          player2Placeholder: "Jucător 2",
+          symbols: "Simboluri",
+          theme: "Temă",
+          turnTimer: "Timer pe tur",
+          onTimeout: "La timeout",
+          whoStarts: "Cine începe",
+          series: "Serie",
+          sound: "Sunet",
+          soundOn: "🔊 Pornit",
+          soundOff: "🔇 Oprit",
+          startGame: "▶ Începe jocul",
+          previewStats: "Preview & statistici",
+          savedSeparately: "Scorurile și setările sunt salvate separat pe configurație.",
+          currentConfig: "Config curent",
+          winsX: "Victorii X",
+          winsO: "Victorii O",
+          draws: "Remize",
+          totalRounds: "Total runde",
+          winRateX: "Win rate X",
+          winRateO: "Win rate O",
+          lastResult: "Ultimul rezultat",
+          timeouts: "Timeout-uri",
+          vsAiRate: "Win rate vs AI",
+          extras: "Ce are în plus",
+          extrasDesc: "Final de serie, hint opțional, undo, nume personalizate PvP, teme reale, statistici extinse și feedback mai rafinat.",
+          match: "Meci",
+          round: "Runda",
+          whoStarted: "Cine a început",
+          movesThisRound: "Mutări în rundă",
+          roundEnd: "Final rundă",
+          hintsUsed: "Hint-uri folosite",
+          undosUsed: "Undo-uri",
+          hintBtn: "💡 Hint",
+          undoBtn: "↩ Undo",
+          resetScore: "Reset scor",
+          newRound: "↺ Rundă nouă",
+          newMatch: "🏁 Meci nou",
+          controlsFeedback: "Control & feedback",
+          controlsDesc: "Săgeți pentru navigare, Enter/Space pentru mutare. Hover-ul arată preview discret. Pe mobil, win și timeout încearcă vibrație dacă browserul permite.",
+          history: "Istoric",
+          historySaved: "Rezultatele meciurilor și seriilor sunt salvate local.",
+          clear: "Șterge",
+          back: "Înapoi",
+          menu: "Meniu",
+          continue: "Continuă",
+          you: "Tu",
+          ai: "AI",
+          player1Default: "Jucător 1",
+          player2Default: "Jucător 2",
+          ready: "Pregătit de joc.",
+          yourTurn: "tura ta",
+          waiting: "așteaptă",
+          thinking: "gândește...",
+          currentPlayerTurn: "{player} — este la mutare.",
+          roundStarted: "Runda {round} a început. {player} începe.",
+          roundWon: "{player} câștigă runda!",
+          roundDraw: "Remiză.",
+          drawLabel: "Remiză",
+          seriesWon: "{player} câștigă seria!",
+          suggestion: "Sugestie: încearcă celula {cell}.",
+          suggestionA11y: "Sugestie disponibilă la celula {cell}.",
+          moveUndone: "Ultima mutare a fost anulată.",
+          moveUndoneA11y: "Mutarea a fost anulată.",
+          paused: "Joc pus pe pauză cât timp fila este inactivă.",
+          resumed: "{player} — joc reluat.",
+          timeoutSkipped: "{player} a rămas fără timp. Tura a fost sărită.",
+          roundEndedDrawA11y: "Rundă terminată la egalitate.",
+          roundEndedWinA11y: "{player} a câștigat runda.",
+          roundWinnerModal: "{player} câștigă runda!",
+          finalLabel: "Final",
+          drawModalTitle: "Remiză!",
+          drawModalSub: "Tabla este completă și nimeni nu a câștigat.",
+          nextRound: "Runda următoare",
+          replaySame: "Aceleași setări",
+          scoreFinal: "Scor final",
+          settingsLabel: "Setări",
+          historyEmpty: "Istoricul este gol.",
+          historySeriesWin: "{player} câștigă seria",
+          historyRoundWin: "{player} câștigă",
+          score: "scor",
+          roundShort: "runda",
+          bestOf: "best of",
+          start: "start",
+          moves: "mutări",
+          end: "final",
+          vsAi: "vs AI",
+          vsP2: "vs P2",
+          cellFree: "Celula {n}, liberă",
+          cellTaken: "Celula {n}, ocupată de {player}",
+          difficultyEasy: "🌱 Ușor",
+          difficultyMedium: "⚡ Mediu",
+          difficultyHard: "🔥 Greu",
+          themeDark: "🌙 Dark",
+          themeLight: "☀️ Light",
+          themeNeon: "🟣 Neon",
+          themeRetro: "🟠 Retro",
+          timerOff: "⏸ Fără timer",
+          timeoutSkip: "Sare tura",
+          timeoutLoss: "Pierde runda",
+          timeoutAuto: "Mutare automată",
+          starterX: "X începe",
+          starterO: "O începe",
+          starterRandom: "Random",
+          oneRound: "1 rundă",
+          normal: "normal",
+          timeout: "timeout",
+          autoMove: "mutare automată",
+          skipTurn: "skip turn",
+          random: "random",
+          noTimer: "fără timer",
+          previewNone: "—"
+        },
+        en: {
+          language: "Language",
+          loading: "Loading the full version...",
+          gameTitle: "Tic Tac Toe",
+          gameSubtitle: "Full version with themes, stats, hints, undo, custom names, and series finale.",
+          gameMode: "Game mode",
+          modeAi: "🤖 vs AI",
+          modePvp: "👥 2 players",
+          aiDifficulty: "AI difficulty",
+          player1Name: "P1 name",
+          player2Name: "P2 name",
+          player1Placeholder: "Player 1",
+          player2Placeholder: "Player 2",
+          symbols: "Symbols",
+          theme: "Theme",
+          turnTimer: "Turn timer",
+          onTimeout: "On timeout",
+          whoStarts: "Who starts",
+          series: "Series",
+          sound: "Sound",
+          soundOn: "🔊 On",
+          soundOff: "🔇 Off",
+          startGame: "▶ Start game",
+          previewStats: "Preview & stats",
+          savedSeparately: "Scores and settings are saved separately by configuration.",
+          currentConfig: "Current config",
+          winsX: "X wins",
+          winsO: "O wins",
+          draws: "Draws",
+          totalRounds: "Total rounds",
+          winRateX: "X win rate",
+          winRateO: "O win rate",
+          lastResult: "Last result",
+          timeouts: "Timeouts",
+          vsAiRate: "Win rate vs AI",
+          extras: "Extras",
+          extrasDesc: "Series finale, optional hint, undo, custom PvP names, real themes, expanded stats, and polished feedback.",
+          match: "Match",
+          round: "Round",
+          whoStarted: "Who started",
+          movesThisRound: "Moves this round",
+          roundEnd: "Round end",
+          hintsUsed: "Hints used",
+          undosUsed: "Undos used",
+          hintBtn: "💡 Hint",
+          undoBtn: "↩ Undo",
+          resetScore: "Reset score",
+          newRound: "↺ New round",
+          newMatch: "🏁 New match",
+          controlsFeedback: "Controls & feedback",
+          controlsDesc: "Use arrow keys to move, Enter/Space to place. Hover shows a subtle preview. On mobile, win and timeout try vibration if supported.",
+          history: "History",
+          historySaved: "Match and series results are stored locally.",
+          clear: "Clear",
+          back: "Back",
+          menu: "Menu",
+          continue: "Continue",
+          you: "You",
+          ai: "AI",
+          player1Default: "Player 1",
+          player2Default: "Player 2",
+          ready: "Ready to play.",
+          yourTurn: "your turn",
+          waiting: "waiting",
+          thinking: "thinking...",
+          currentPlayerTurn: "{player} — it's your turn.",
+          roundStarted: "Round {round} started. {player} goes first.",
+          roundWon: "{player} wins the round!",
+          roundDraw: "Draw.",
+          drawLabel: "Draw",
+          seriesWon: "{player} wins the series!",
+          suggestion: "Suggestion: try cell {cell}.",
+          suggestionA11y: "Suggestion available on cell {cell}.",
+          moveUndone: "The last move was undone.",
+          moveUndoneA11y: "The move was undone.",
+          paused: "Game paused while the tab is inactive.",
+          resumed: "{player} — game resumed.",
+          timeoutSkipped: "{player} ran out of time. Turn was skipped.",
+          roundEndedDrawA11y: "Round ended in a draw.",
+          roundEndedWinA11y: "{player} won the round.",
+          roundWinnerModal: "{player} wins the round!",
+          finalLabel: "Finish",
+          drawModalTitle: "Draw!",
+          drawModalSub: "The board is full and nobody won.",
+          nextRound: "Next round",
+          replaySame: "Same settings",
+          scoreFinal: "Final score",
+          settingsLabel: "Settings",
+          historyEmpty: "History is empty.",
+          historySeriesWin: "{player} wins the series",
+          historyRoundWin: "{player} wins",
+          score: "score",
+          roundShort: "round",
+          bestOf: "best of",
+          start: "start",
+          moves: "moves",
+          end: "end",
+          vsAi: "vs AI",
+          vsP2: "vs P2",
+          cellFree: "Cell {n}, empty",
+          cellTaken: "Cell {n}, taken by {player}",
+          difficultyEasy: "🌱 Easy",
+          difficultyMedium: "⚡ Medium",
+          difficultyHard: "🔥 Hard",
+          themeDark: "🌙 Dark",
+          themeLight: "☀️ Light",
+          themeNeon: "🟣 Neon",
+          themeRetro: "🟠 Retro",
+          timerOff: "⏸ No timer",
+          timeoutSkip: "Skip turn",
+          timeoutLoss: "Lose round",
+          timeoutAuto: "Auto move",
+          starterX: "X starts",
+          starterO: "O starts",
+          starterRandom: "Random",
+          oneRound: "1 round",
+          normal: "normal",
+          timeout: "timeout",
+          autoMove: "auto move",
+          skipTurn: "skip turn",
+          random: "random",
+          noTimer: "no timer",
+          previewNone: "—"
+        }
+      };
+
+      const SYMBOLS = {
+        XO:       { X: "X", O: "O", label: "X/O" },
+        catmouse: { X: "🐱", O: "🐭", label: "🐱/🐭" },
+        love:     { X: "❤️", O: "💔", label: "❤️/💔" },
+        sunmoon:  { X: "☀️", O: "🌙", label: "☀️/🌙" }
+      };
+
+      const THEMES = ["dark", "light", "neon", "retro"];
+      const WIN_LINES = [
+        [0,1,2],[3,4,5],[6,7,8],
+        [0,3,6],[1,4,7],[2,5,8],
+        [0,4,8],[2,4,6]
+      ];
+
+      const STORE = {
+        settings: "tttultimate:settings:v2",
+        history: "tttultimate:history:v2",
+        statsGlobal: "tttultimate:stats:global:v2",
+        scoresPrefix: "tttultimate:scores:v2:"
+      };
+
+      const DEFAULT_SETTINGS = {
+        lang: "ro",
+        mode: "ai",
+        difficulty: "hard",
+        symbols: "XO",
+        timerMax: 0,
+        timeoutBehavior: "skip",
+        starter: "X",
+        seriesLength: 1,
+        soundEnabled: true,
+        theme: "dark",
+        player1Name: "",
+        player2Name: ""
+      };
+
+      const DEFAULT_MATCH = () => ({
+        board: Array(9).fill(null),
+        active: false,
+        turn: "X",
+        round: 1,
+        baseStarter: "X",
+        currentStarter: "X",
+        scores: { X: 0, O: 0, draw: 0 },
+        lastMoveIndex: null,
+        endReason: null,
+        matchOver: false,
+        hintsUsed: 0,
+        undosUsed: 0,
+        historyStack: [],
+        hintCell: null
+      });
+
+      const DEFAULT_GLOBAL_STATS = {
+        totalRounds: 0,
+        totalMatches: 0,
+        xWins: 0,
+        oWins: 0,
+        draws: 0,
+        timeouts: 0,
+        hintsUsed: 0,
+        undosUsed: 0,
+        vsAiRounds: 0,
+        vsAiPlayerWins: 0,
+        winsByDifficulty: { easy: 0, medium: 0, hard: 0 },
+        roundsByDifficulty: { easy: 0, medium: 0, hard: 0 }
+      };
+
+      const $ = (s) => document.querySelector(s);
+      const $$ = (s) => [...document.querySelectorAll(s)];
+
+      const els = {
+        splash: $("#screenSplash"),
+        start: $("#screenStart"),
+        game: $("#screenGame"),
+        history: $("#screenHistory"),
+
+        languageSelect: $("#languageSelect"),
+        modeBtns: $$("#modeGroup .pill"),
+        soundBtns: $$("#soundGroup .pill"),
+        difficultyWrap: $("#difficultyWrap"),
+        namesWrap: $("#namesWrap"),
+        difficultySelect: $("#difficultySelect"),
+        symbolSelect: $("#symbolSelect"),
+        timerSelect: $("#timerSelect"),
+        timeoutSelect: $("#timeoutSelect"),
+        starterSelect: $("#starterSelect"),
+        seriesSelect: $("#seriesSelect"),
+        themeSelect: $("#themeSelect"),
+        player1Input: $("#player1Input"),
+        player2Input: $("#player2Input"),
+        startGameBtn: $("#startGameBtn"),
+        previewThemeBtn: $("#previewThemeBtn"),
+
+        previewSummary: $("#previewSummary"),
+        previewXWins: $("#previewXWins"),
+        previewOWins: $("#previewOWins"),
+        previewDraws: $("#previewDraws"),
+        previewTotalRounds: $("#previewTotalRounds"),
+        previewXRate: $("#previewXRate"),
+        previewORate: $("#previewORate"),
+        previewLastResult: $("#previewLastResult"),
+        previewTimeouts: $("#previewTimeouts"),
+        previewVsAiRate: $("#previewVsAiRate"),
+
+        soundBtn: $("#soundBtn"),
+        themeBtn: $("#themeBtn"),
+        historyBtn: $("#historyBtn"),
+        menuBtn: $("#menuBtn"),
+        hintBtn: $("#hintBtn"),
+        undoBtn: $("#undoBtn"),
+        resetScoresBtn: $("#resetScoresBtn"),
+        newRoundBtn: $("#newRoundBtn"),
+        newMatchBtn: $("#newMatchBtn"),
+
+        configSummary: $("#configSummary"),
+        playerXPanel: $("#playerXPanel"),
+        playerOPanel: $("#playerOPanel"),
+        playerXName: $("#playerXName"),
+        playerOName: $("#playerOName"),
+        playerXSub: $("#playerXSub"),
+        playerOSub: $("#playerOSub"),
+        symbolX: $("#symbolX"),
+        symbolO: $("#symbolO"),
+
+        scoreXLabel: $("#scoreXLabel"),
+        scoreOLabel: $("#scoreOLabel"),
+        scoreX: $("#scoreX"),
+        scoreO: $("#scoreO"),
+        scoreDraw: $("#scoreDraw"),
+
+        seriesInfo: $("#seriesInfo"),
+        starterInfo: $("#starterInfo"),
+        movesInfo: $("#movesInfo"),
+        endReasonInfo: $("#endReasonInfo"),
+        hintsInfo: $("#hintsInfo"),
+        undosInfo: $("#undosInfo"),
+
+        timerBox: $("#timerBox"),
+        timerValue: $("#timerValue"),
+        timerFill: $("#timerFill"),
+
+        board: $("#board"),
+        cells: $$(".cell"),
+        status: $("#status"),
+        a11yLive: $("#a11yLive"),
+
+        historyList: $("#historyList"),
+        clearHistoryBtn: $("#clearHistoryBtn"),
+        backFromHistoryBtn: $("#backFromHistoryBtn"),
+
+        resultModal: $("#resultModal"),
+        resultModalBox: $("#resultModalBox"),
+        modalDynamic: $("#modalDynamic"),
+        modalMenuBtn: $("#modalMenuBtn"),
+        modalContinueBtn: $("#modalContinueBtn")
+      };
+
+      const app = {
+        settings: loadSettings(),
+        match: DEFAULT_MATCH(),
+        history: loadHistory(),
+        globalStats: loadGlobalStats(),
+        timerId: null,
+        timerLeft: 0,
+        pausedByVisibility: false,
+        audioCtx: null
+      };
+
+      function loadSettings() {
+        try {
+          return { ...DEFAULT_SETTINGS, ...(JSON.parse(localStorage.getItem(STORE.settings)) || {}) };
+        } catch {
+          return { ...DEFAULT_SETTINGS };
+        }
+      }
+
+      function saveSettings() {
+        localStorage.setItem(STORE.settings, JSON.stringify(app.settings));
+      }
+
+      function loadHistory() {
+        try {
+          return JSON.parse(localStorage.getItem(STORE.history)) || [];
+        } catch {
+          return [];
+        }
+      }
+
+      function saveHistory() {
+        localStorage.setItem(STORE.history, JSON.stringify(app.history.slice(0, 80)));
+      }
+
+      function loadGlobalStats() {
+        try {
+          return { ...DEFAULT_GLOBAL_STATS, ...(JSON.parse(localStorage.getItem(STORE.statsGlobal)) || {}) };
+        } catch {
+          return { ...DEFAULT_GLOBAL_STATS };
+        }
+      }
+
+      function saveGlobalStats() {
+        localStorage.setItem(STORE.statsGlobal, JSON.stringify(app.globalStats));
+      }
+
+      function t(key, vars = {}) {
+        const dict = I18N[app.settings.lang] || I18N.ro;
+        let str = dict[key] ?? key;
+        Object.keys(vars).forEach(k => {
+          str = str.replaceAll(`{${k}}`, vars[k]);
+        });
+        return str;
+      }
+
+      function scoreKey() {
+        const s = app.settings;
+        return [
+          STORE.scoresPrefix,
+          `lang=${s.lang}`,
+          `mode=${s.mode}`,
+          `difficulty=${s.mode === "ai" ? s.difficulty : "na"}`,
+          `symbols=${s.symbols}`,
+          `timer=${s.timerMax}`,
+          `timeout=${s.timeoutBehavior}`,
+          `starter=${s.starter}`,
+          `series=${s.seriesLength}`,
+          `theme=${s.theme}`
+        ].join("|");
+      }
+
+      function loadScores() {
+        try {
+          return JSON.parse(localStorage.getItem(scoreKey())) || { X: 0, O: 0, draw: 0 };
+        } catch {
+          return { X: 0, O: 0, draw: 0 };
+        }
+      }
+
+      function saveScores() {
+        localStorage.setItem(scoreKey(), JSON.stringify(app.match.scores));
+      }
+
+      function setTheme(theme) {
+        if (!THEMES.includes(theme)) theme = "dark";
+        app.settings.theme = theme;
+        document.body.setAttribute("data-theme", theme);
+        saveSettings();
+      }
+
+      function showScreen(name) {
+        [els.splash, els.start, els.game, els.history].forEach(s => s.classList.remove("active"));
+        els[name].classList.add("active");
+      }
+
+      function difficultyLabel(v) {
+        return v === "easy" ? t("difficultyEasy")
+          : v === "medium" ? t("difficultyMedium")
+          : t("difficultyHard");
+      }
+
+      function themeLabel(v) {
+        return v === "dark" ? t("themeDark")
+          : v === "light" ? t("themeLight")
+          : v === "neon" ? t("themeNeon")
+          : t("themeRetro");
+      }
+
+      function timeoutLabel(v) {
+        if (v === "skip") return t("skipTurn");
+        if (v === "loss") return t("timeout");
+        return t("autoMove");
+      }
+
+      function timeoutOptionLabel(v) {
+        if (v === "skip") return t("timeoutSkip");
+        if (v === "loss") return t("timeoutLoss");
+        return t("timeoutAuto");
+      }
+
+      function starterLabel(v) {
+        if (v === "random") return t("random");
+        return v;
+      }
+
+      function endReasonLabel(reason) {
+        if (reason === "timeout-loss") return t("timeout");
+        if (reason === "timeout-auto") return t("autoMove");
+        if (reason === "timeout-skip") return t("skipTurn");
+        return t("normal");
+      }
+
+      function noTimerLabel() {
+        return t("noTimer");
+      }
+
+      function playerName(player) {
+        if (app.settings.mode === "ai") return player === "X" ? t("you") : t("ai");
+        return player === "X"
+          ? (app.settings.player1Name.trim() || t("player1Default"))
+          : (app.settings.player2Name.trim() || t("player2Default"));
+      }
+
+      function applyTranslations() {
+        document.documentElement.lang = app.settings.lang;
+        $$("[data-i18n]").forEach(el => {
+          el.textContent = t(el.dataset.i18n);
+        });
+
+        els.player1Input.placeholder = t("player1Placeholder");
+        els.player2Input.placeholder = t("player2Placeholder");
+
+        els.languageSelect.value = app.settings.lang;
+
+        els.difficultySelect.innerHTML = `
+          <option value="easy">${difficultyLabel("easy")}</option>
+          <option value="medium">${difficultyLabel("medium")}</option>
+          <option value="hard">${difficultyLabel("hard")}</option>
+        `;
+        els.difficultySelect.value = app.settings.difficulty;
+
+        els.themeSelect.innerHTML = `
+          <option value="dark">${themeLabel("dark")}</option>
+          <option value="light">${themeLabel("light")}</option>
+          <option value="neon">${themeLabel("neon")}</option>
+          <option value="retro">${themeLabel("retro")}</option>
+        `;
+        els.themeSelect.value = app.settings.theme;
+
+        els.timerSelect.innerHTML = `
+          <option value="0">${t("timerOff")}</option>
+          <option value="10">10 sec</option>
+          <option value="15">15 sec</option>
+          <option value="30">30 sec</option>
+        `;
+        els.timerSelect.value = String(app.settings.timerMax);
+
+        els.timeoutSelect.innerHTML = `
+          <option value="skip">${timeoutOptionLabel("skip")}</option>
+          <option value="loss">${timeoutOptionLabel("loss")}</option>
+          <option value="auto">${timeoutOptionLabel("auto")}</option>
+        `;
+        els.timeoutSelect.value = app.settings.timeoutBehavior;
+
+        els.starterSelect.innerHTML = `
+          <option value="X">${t("starterX")}</option>
+          <option value="O">${t("starterO")}</option>
+          <option value="random">${t("starterRandom")}</option>
+        `;
+        els.starterSelect.value = app.settings.starter;
+
+        els.seriesSelect.innerHTML = `
+          <option value="1">${t("oneRound")}</option>
+          <option value="3">Best of 3</option>
+          <option value="5">Best of 5</option>
+        `;
+        els.seriesSelect.value = String(app.settings.seriesLength);
+
+        document.title = "Tic Tac Toe Ultimate";
+      }
+
+      function configText() {
+        const s = app.settings;
+        return [
+          s.mode === "ai"
+            ? `${t("vsAi")} (${s.difficulty})`
+            : `${safeName("X")} vs ${safeName("O")}`,
+          SYMBOLS[s.symbols].label,
+          s.timerMax ? `${s.timerMax}s` : noTimerLabel(),
+          `timeout: ${timeoutLabel(s.timeoutBehavior)}`,
+          `start: ${starterLabel(s.starter)}`,
+          `best of ${s.seriesLength}`,
+          s.theme
+        ].join(" · ");
+      }
+
+      function safeName(player) {
+        if (app.settings.mode === "ai") return player === "X" ? t("you") : t("ai");
+        return player === "X"
+          ? (app.settings.player1Name.trim() || t("player1Default"))
+          : (app.settings.player2Name.trim() || t("player2Default"));
+      }
+
+      function syncSettingsUI() {
+        applyTranslations();
+
+        els.modeBtns.forEach(btn => btn.classList.toggle("active", btn.dataset.value === app.settings.mode));
+        els.soundBtns.forEach(btn => btn.classList.toggle("active", (btn.dataset.value === "on") === app.settings.soundEnabled));
+
+        els.symbolSelect.value = app.settings.symbols;
+        els.player1Input.value = app.settings.player1Name;
+        els.player2Input.value = app.settings.player2Name;
+
+        els.difficultyWrap.style.display = app.settings.mode === "ai" ? "" : "none";
+        els.namesWrap.style.display = app.settings.mode === "pvp" ? "grid" : "none";
+
+        els.soundBtn.textContent = app.settings.soundEnabled ? "🔊" : "🔇";
+        els.soundBtn.classList.toggle("muted", !app.settings.soundEnabled);
+
+        updatePreview();
+        updateGameMeta();
+        updateTurnUI();
+        renderBoard();
+        renderHistory();
+      }
+
+      function updatePreview() {
+        const scores = loadScores();
+        const total = scores.X + scores.O + scores.draw;
+        els.previewSummary.textContent = configText();
+        els.previewXWins.textContent = scores.X;
+        els.previewOWins.textContent = scores.O;
+        els.previewDraws.textContent = scores.draw;
+        els.previewTotalRounds.textContent = total;
+        els.previewXRate.textContent = total ? Math.round((scores.X / total) * 100) + "%" : "0%";
+        els.previewORate.textContent = total ? Math.round((scores.O / total) * 100) + "%" : "0%";
+
+        const latest = app.history[0];
+        els.previewLastResult.textContent = latest
+          ? (latest.result === "draw" ? t("drawLabel") : `${latest.winnerName}`)
+          : t("previewNone");
+
+        els.previewTimeouts.textContent = app.globalStats.timeouts;
+        els.previewVsAiRate.textContent = app.globalStats.vsAiRounds
+          ? Math.round((app.globalStats.vsAiPlayerWins / app.globalStats.vsAiRounds) * 100) + "%"
+          : "0%";
+      }
+
+      function announce(msg) {
+        els.a11yLive.textContent = "";
+        requestAnimationFrame(() => { els.a11yLive.textContent = msg; });
+      }
+
+      function setStatus(msg, cls = "muted") {
+        els.status.textContent = msg;
+        els.status.className = `status ${cls}`;
+      }
+
+      function vibrate(ms = 60) {
+        if (navigator.vibrate) {
+          try { navigator.vibrate(ms); } catch {}
+        }
+      }
+
+      function getAudioCtx() {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return null;
+        if (!app.audioCtx) app.audioCtx = new AudioCtx();
+        return app.audioCtx;
+      }
+
+      async function resumeAudio() {
+        const ctx = getAudioCtx();
+        if (ctx && ctx.state === "suspended") {
+          try { await ctx.resume(); } catch {}
+        }
+      }
+
+      function playTone(freq, type = "sine", dur = .12, vol = .1) {
+        if (!app.settings.soundEnabled) return;
+        const ctx = getAudioCtx();
+        if (!ctx) return;
+        try {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = type;
+          osc.frequency.setValueAtTime(freq, ctx.currentTime);
+          osc.frequency.exponentialRampToValueAtTime(Math.max(100, freq * .9), ctx.currentTime + dur);
+          gain.gain.setValueAtTime(vol, ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(.001, ctx.currentTime + dur);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start();
+          osc.stop(ctx.currentTime + dur);
+        } catch {}
+      }
+
+      function sfxMoveX(){ playTone(480, "triangle", .1, .07); }
+      function sfxMoveO(){ playTone(390, "sine", .1, .07); }
+      function sfxTick(){ playTone(880, "square", .05, .05); }
+      function sfxDraw(){ playTone(320, "sawtooth", .18, .05); }
+      function sfxTimeout(){ [440,330,220].forEach((f,i)=>setTimeout(()=>playTone(f,"sawtooth",.12,.08), i*90)); }
+      function sfxWin(){ [523,659,784,1047].forEach((f,i)=>setTimeout(()=>playTone(f,"triangle",.16,.13), i*70)); }
+      function sfxHint(){ playTone(700, "sine", .08, .05); }
+
+      function getWinner(board) {
+        for (const line of WIN_LINES) {
+          const [a,b,c] = line;
+          if (board[a] && board[a] === board[b] && board[b] === board[c]) {
+            return { player: board[a], line };
+          }
+        }
+        return null;
+      }
+
+      function emptyCells(board = app.match.board) {
+        return board.map((v,i) => v === null ? i : null).filter(v => v !== null);
+      }
+
+      function isAiTurn() {
+        return app.settings.mode === "ai" && app.match.turn === "O" && app.match.active;
+      }
+
+      function canUseHint() {
+        return app.match.active && !isAiTurn();
+      }
+
+      function canUndo() {
+        return app.match.active && app.match.historyStack.length > 0;
+      }
+
+      function initialStarter() {
+        if (app.settings.starter === "random") return Math.random() < .5 ? "X" : "O";
+        return app.settings.starter;
+      }
+
+      function roundStarter(round) {
+        return round % 2 === 1
+          ? app.match.baseStarter
+          : (app.match.baseStarter === "X" ? "O" : "X");
+      }
+
+      function neededWins() {
+        return Math.ceil(app.settings.seriesLength / 2);
+      }
+
+      function startMatch() {
+        stopTimer();
+        closeModal();
+        app.match = DEFAULT_MATCH();
+        app.match.scores = loadScores();
+        app.match.baseStarter = initialStarter();
+        app.match.round = 1;
+        resetRound(roundStarter(1));
+        updateGameMeta();
+        showScreen("game");
+        maybeAiMove();
+      }
+
+      function resetRound(starter) {
+        app.match.board = Array(9).fill(null);
+        app.match.active = true;
+        app.match.turn = starter;
+        app.match.currentStarter = starter;
+        app.match.lastMoveIndex = null;
+        app.match.endReason = null;
+        app.match.matchOver = false;
+        app.match.historyStack = [];
+        app.match.hintCell = null;
+
+        els.cells.forEach((c, i) => {
+          c.disabled = false;
+          c.className = "cell";
+          c.textContent = "";
+          c.setAttribute("aria-label", t("cellFree", { n: i + 1 }));
+        });
+
+        updateGameMeta();
+        renderBoard();
+        updateTurnUI();
+        startTimerIfNeeded();
+        announce(t("roundStarted", { round: app.match.round, player: playerName(starter) }));
+      }
+
+      function nextRound() {
+        if (seriesDecided()) {
+          startMatch();
+          return;
+        }
+        closeModal();
+        app.match.round += 1;
+        resetRound(roundStarter(app.match.round));
+        maybeAiMove();
+      }
+
+      function updateGameMeta() {
+        const sym = SYMBOLS[app.settings.symbols];
+        els.symbolX.textContent = sym.X;
+        els.symbolO.textContent = sym.O;
+        els.playerXName.textContent = playerName("X");
+        els.playerOName.textContent = playerName("O");
+        els.scoreXLabel.textContent = playerName("X");
+        els.scoreOLabel.textContent = playerName("O");
+        els.configSummary.textContent = configText();
+        els.scoreX.textContent = app.match.scores.X;
+        els.scoreO.textContent = app.match.scores.O;
+        els.scoreDraw.textContent = app.match.scores.draw;
+        els.seriesInfo.textContent = `${app.match.round} / ${app.settings.seriesLength}`;
+        els.starterInfo.textContent = app.match.currentStarter;
+        els.movesInfo.textContent = app.match.board.filter(Boolean).length;
+        els.endReasonInfo.textContent = app.match.endReason || t("previewNone");
+        els.hintsInfo.textContent = app.match.hintsUsed;
+        els.undosInfo.textContent = app.match.undosUsed;
+      }
+
+      function updateTurnUI() {
+        const turn = app.match.turn;
+        els.playerXPanel.classList.toggle("active", turn === "X" && app.match.active);
+        els.playerOPanel.classList.toggle("active", turn === "O" && app.match.active);
+
+        els.playerXSub.textContent = turn === "X" && app.match.active ? t("yourTurn") : t("waiting");
+        els.playerOSub.textContent = turn === "O" && app.match.active
+          ? (app.settings.mode === "ai" ? t("thinking") : t("yourTurn"))
+          : t("waiting");
+
+        if (app.match.active) {
+          setStatus(t("currentPlayerTurn", { player: playerName(turn) }), turn === "X" ? "x" : "o");
+        } else if (!els.status.textContent.trim()) {
+          setStatus(t("ready"), "muted");
+        }
+      }
+
+      function renderBoard() {
+        const sym = SYMBOLS[app.settings.symbols];
+        els.cells.forEach((cell, i) => {
+          const v = app.match.board[i];
+          cell.textContent = v ? sym[v] : "";
+          cell.classList.remove("x-mark", "o-mark", "last", "hint", "preview-x", "preview-o");
+
+          cell.dataset.previewX = sym.X;
+          cell.dataset.previewO = sym.O;
+
+          if (v === "X") cell.classList.add("x-mark");
+          if (v === "O") cell.classList.add("o-mark");
+          if (app.match.lastMoveIndex === i) cell.classList.add("last");
+          if (app.match.hintCell === i) cell.classList.add("hint");
+
+          if (!v && app.match.active && !isAiTurn()) {
+            cell.classList.add(app.match.turn === "X" ? "preview-x" : "preview-o");
+          }
+
+          cell.disabled = !!v || !app.match.active || isAiTurn();
+          cell.setAttribute("aria-label",
+            v ? t("cellTaken", { n: i + 1, player: playerName(v) }) : t("cellFree", { n: i + 1 })
+          );
+        });
+
+        els.undoBtn.disabled = !canUndo();
+        els.hintBtn.disabled = !canUseHint();
+        updateGameMeta();
+      }
+
+      function snapshotState() {
+        return {
+          board: [...app.match.board],
+          turn: app.match.turn,
+          lastMoveIndex: app.match.lastMoveIndex,
+          timerLeft: app.timerLeft,
+          hintCell: app.match.hintCell
+        };
+      }
+
+      function pushHistorySnapshot() {
+        app.match.historyStack.push(snapshotState());
+      }
+
+      function applyMove(index, player, reason = "normal", recordHistory = true) {
+        if (!app.match.active) return false;
+        if (app.match.board[index] !== null) return false;
+
+        if (recordHistory) pushHistorySnapshot();
+
+        stopTimer();
+        app.match.board[index] = player;
+        app.match.lastMoveIndex = index;
+        app.match.hintCell = null;
+
+        if (player === "X") sfxMoveX();
+        else sfxMoveO();
+
+        renderBoard();
+
+        const cell = els.cells[index];
+        cell.classList.add("pop");
+        setTimeout(() => cell.classList.remove("pop"), 240);
+
+        const winner = getWinner(app.match.board);
+        if (winner) {
+          endRound("win", winner.player, winner.line, reason);
+          return true;
+        }
+
+        if (!app.match.board.includes(null)) {
+          endRound("draw", null, null, reason);
+          return true;
+        }
+
+        app.match.turn = player === "X" ? "O" : "X";
+        updateTurnUI();
+        renderBoard();
+        startTimerIfNeeded();
+        maybeAiMove();
+        return true;
+      }
+
+      function undoMove() {
+        if (!canUndo()) return;
+
+        stopTimer();
+
+        if (app.settings.mode === "ai") {
+          if (app.match.historyStack.length >= 2) {
+            app.match.historyStack.pop();
+            const state = app.match.historyStack.pop();
+            restoreSnapshot(state);
+          } else {
+            const state = app.match.historyStack.pop();
+            if (state) restoreSnapshot(state);
+          }
+        } else {
+          const state = app.match.historyStack.pop();
+          if (state) restoreSnapshot(state);
+        }
+
+        app.match.undosUsed++;
+        app.globalStats.undosUsed++;
+        saveGlobalStats();
+        renderBoard();
+        updateTurnUI();
+        startTimerIfNeeded();
+        setStatus(t("moveUndone"), "warn");
+        announce(t("moveUndoneA11y"));
+      }
+
+      function restoreSnapshot(state) {
+        app.match.board = [...state.board];
+        app.match.turn = state.turn;
+        app.match.lastMoveIndex = state.lastMoveIndex;
+        app.match.hintCell = state.hintCell ?? null;
+        app.timerLeft = state.timerLeft || app.settings.timerMax;
+      }
+
+      function endRound(type, winner, line, reason) {
+        app.match.active = false;
+        app.match.endReason = endReasonLabel(reason);
+        stopTimer();
+
+        if (type === "win" && line) {
+          line.forEach(i => {
+            els.cells[i].classList.add("win");
+            if (winner === "O") els.cells[i].classList.add("o-line");
+          });
+        }
+
+        app.globalStats.totalRounds++;
+        if (type === "win") {
+          app.match.scores[winner] += 1;
+
+          if (winner === "X") app.globalStats.xWins++;
+          else app.globalStats.oWins++;
+
+          if (app.settings.mode === "ai") {
+            app.globalStats.vsAiRounds++;
+            app.globalStats.roundsByDifficulty[app.settings.difficulty]++;
+            if (winner === "X") {
+              app.globalStats.vsAiPlayerWins++;
+              app.globalStats.winsByDifficulty[app.settings.difficulty]++;
+            }
+          }
+
+          sfxWin();
+          vibrate(70);
+          saveScores();
+
+          addHistory({
+            result: winner,
+            reason,
+            board: [...app.match.board],
+            winnerName: playerName(winner),
+            type: "round"
+          });
+
+          setStatus(t("roundWon", { player: playerName(winner) }), winner === "X" ? "x" : "o");
+          spawnConfetti(
+            winner === "X"
+              ? getComputedStyle(document.body).getPropertyValue('--x-color').trim()
+              : getComputedStyle(document.body).getPropertyValue('--o-color').trim()
+          );
+
+          if (seriesDecided()) {
+            app.match.matchOver = true;
+            app.globalStats.totalMatches++;
+            addHistory({
+              result: winner,
+              reason: "series",
+              board: [...app.match.board],
+              winnerName: playerName(winner),
+              type: "series"
+            });
+            showSeriesModal(winner);
+          } else {
+            showRoundModal(winner, reason);
+          }
+        } else {
+          app.match.scores.draw += 1;
+          app.globalStats.draws++;
+
+          if (app.settings.mode === "ai") {
+            app.globalStats.vsAiRounds++;
+            app.globalStats.roundsByDifficulty[app.settings.difficulty]++;
+          }
+
+          sfxDraw();
+          saveScores();
+
+          addHistory({
+            result: "draw",
+            reason,
+            board: [...app.match.board],
+            winnerName: t("drawLabel"),
+            type: "round"
+          });
+
+          setStatus(t("roundDraw"), "muted");
+          showDrawModal();
+        }
+
+        saveGlobalStats();
+        renderBoard();
+        updatePreview();
+        announce(type === "draw" ? t("roundEndedDrawA11y") : t("roundEndedWinA11y", { player: playerName(winner) }));
+      }
+
+      function seriesDecided() {
+        return app.match.scores.X >= neededWins() || app.match.scores.O >= neededWins();
+      }
+
+      function chooseAiMove() {
+        const empties = emptyCells();
+        if (!empties.length) return null;
+
+        if (app.settings.difficulty === "easy") return randomChoice(empties);
+
+        if (app.settings.difficulty === "medium") {
+          const roll = Math.random();
+          if (roll < 0.55) return bestMove();
+          if (roll < 0.82) return strategicHumanMove();
+          return randomChoice(empties);
+        }
+
+        return bestMove();
+      }
+
+      function getHintMove() {
+        if (!canUseHint()) return null;
+        if (app.settings.mode === "pvp") {
+          return app.match.turn === "X" ? bestMoveFor("X") : bestMoveFor("O");
+        }
+        if (app.settings.difficulty === "hard") return bestMoveFor("X");
+        return strategicPlayerHint();
+      }
+
+      function strategicPlayerHint() {
+        const empties = emptyCells();
+        for (const idx of empties) {
+          app.match.board[idx] = "X";
+          if (getWinner(app.match.board)?.player === "X") {
+            app.match.board[idx] = null;
+            return idx;
+          }
+          app.match.board[idx] = null;
+        }
+        for (const idx of empties) {
+          app.match.board[idx] = "O";
+          if (getWinner(app.match.board)?.player === "O") {
+            app.match.board[idx] = null;
+            return idx;
+          }
+          app.match.board[idx] = null;
+        }
+        const prefs = [4,0,2,6,8,1,3,5,7];
+        return prefs.find(i => empties.includes(i)) ?? empties[0];
+      }
+
+      function strategicHumanMove() {
+        const empties = emptyCells();
+
+        for (const idx of empties) {
+          app.match.board[idx] = "O";
+          if (getWinner(app.match.board)?.player === "O") {
+            app.match.board[idx] = null;
+            return idx;
+          }
+          app.match.board[idx] = null;
+        }
+
+        for (const idx of empties) {
+          app.match.board[idx] = "X";
+          if (getWinner(app.match.board)?.player === "X") {
+            app.match.board[idx] = null;
+            return idx;
+          }
+          app.match.board[idx] = null;
+        }
+
+        const prefs = [4,0,2,6,8,1,3,5,7];
+        const decent = prefs.filter(i => empties.includes(i));
+        if (decent.length) return decent[Math.floor(Math.random() * Math.min(3, decent.length))];
+        return randomChoice(empties);
+      }
+
+      function bestMove() {
+        return bestMoveFor("O");
+      }
+
+      function bestMoveFor(player) {
+        let bestScore = -Infinity;
+        let bestIndex = null;
+        const opponent = player === "X" ? "O" : "X";
+
+        for (const idx of emptyCells()) {
+          app.match.board[idx] = player;
+          const score = minimaxGeneric(app.match.board, 0, false, player, opponent);
+          app.match.board[idx] = null;
+          if (score > bestScore) {
+            bestScore = score;
+            bestIndex = idx;
+          }
+        }
+        return bestIndex;
+      }
+
+      function minimaxGeneric(board, depth, isMax, maxPlayer, minPlayer) {
+        const winner = getWinner(board);
+        if (winner) return winner.player === maxPlayer ? 10 - depth : depth - 10;
+        if (!board.includes(null)) return 0;
+
+        const empties = board.map((v,i) => v === null ? i : null).filter(v => v !== null);
+
+        if (isMax) {
+          let best = -Infinity;
+          for (const idx of empties) {
+            board[idx] = maxPlayer;
+            best = Math.max(best, minimaxGeneric(board, depth + 1, false, maxPlayer, minPlayer));
+            board[idx] = null;
+          }
+          return best;
+        } else {
+          let best = Infinity;
+          for (const idx of empties) {
+            board[idx] = minPlayer;
+            best = Math.min(best, minimaxGeneric(board, depth + 1, true, maxPlayer, minPlayer));
+            board[idx] = null;
+          }
+          return best;
+        }
+      }
+
+      function randomChoice(arr) {
+        return arr[Math.floor(Math.random() * arr.length)];
+      }
+
+      function maybeAiMove() {
+        if (!isAiTurn()) return;
+        setTimeout(() => {
+          if (!isAiTurn()) return;
+          const move = chooseAiMove();
+          if (move !== null) applyMove(move, "O", "normal");
+        }, window.innerWidth < 680 ? 300 : 450);
+      }
+
+      function startTimerIfNeeded() {
+        stopTimer();
+        if (!app.match.active || app.settings.timerMax <= 0) {
+          els.timerBox.classList.remove("show");
+          return;
+        }
+
+        app.timerLeft = app.settings.timerMax;
+        els.timerBox.classList.add("show");
+        renderTimer();
+
+        app.timerId = setInterval(() => {
+          app.timerLeft--;
+          renderTimer();
+
+          if (app.timerLeft > 0 && app.timerLeft <= 3) sfxTick();
+
+          if (app.timerLeft <= 0) {
+            stopTimer();
+            sfxTimeout();
+            vibrate(40);
+            handleTimeout();
+          }
+        }, 1000);
+      }
+
+      function stopTimer() {
+        if (app.timerId) {
+          clearInterval(app.timerId);
+          app.timerId = null;
+        }
+      }
+
+      function renderTimer() {
+        els.timerValue.textContent = String(app.timerLeft);
+        const pct = Math.max(0, (app.timerLeft / app.settings.timerMax) * 100);
+        els.timerFill.style.width = pct + "%";
+        const urgent = app.timerLeft <= 3;
+        els.timerValue.classList.toggle("urgent", urgent);
+        els.timerFill.classList.toggle("urgent", urgent);
+      }
+
+      function handleTimeout() {
+        if (!app.match.active) return;
+
+        const current = app.match.turn;
+        const other = current === "X" ? "O" : "X";
+        app.globalStats.timeouts++;
+
+        if (app.settings.timeoutBehavior === "loss") {
+          endRound("win", other, null, "timeout-loss");
+          saveGlobalStats();
+          return;
+        }
+
+        if (app.settings.timeoutBehavior === "auto") {
+          const empties = emptyCells();
+          if (empties.length) applyMove(randomChoice(empties), current, "timeout-auto");
+          saveGlobalStats();
+          return;
+        }
+
+        app.match.endReason = endReasonLabel("timeout-skip");
+        app.match.turn = other;
+        renderBoard();
+        updateTurnUI();
+        startTimerIfNeeded();
+        maybeAiMove();
+        announce(t("timeoutSkipped", { player: playerName(current) }));
+        saveGlobalStats();
+      }
+
+      function addHistory({ result, reason, board, winnerName, type }) {
+        const now = new Date();
+        const sym = SYMBOLS[app.settings.symbols];
+
+        app.history.unshift({
+          id: Math.random().toString(36).slice(2, 10),
+          createdAt: now.toLocaleString(app.settings.lang === "ro" ? "ro-RO" : "en-GB"),
+          result,
+          reason: endReasonLabel(reason),
+          mode: app.settings.mode,
+          difficulty: app.settings.mode === "ai" ? app.settings.difficulty : "-",
+          symbols: `${sym.X}/${sym.O}`,
+          timer: app.settings.timerMax,
+          timeout: timeoutLabel(app.settings.timeoutBehavior),
+          round: app.match.round,
+          series: app.settings.seriesLength,
+          starter: app.match.currentStarter,
+          moves: board.filter(Boolean).length,
+          scoreX: app.match.scores.X,
+          scoreO: app.match.scores.O,
+          scoreD: app.match.scores.draw,
+          winnerName,
+          type,
+          lang: app.settings.lang
+        });
+
+        app.history = app.history.slice(0, 80);
+        saveHistory();
+      }
+
+      function renderHistory() {
+        if (!app.history.length) {
+          els.historyList.innerHTML = `<div class="empty">${t("historyEmpty")}</div>`;
+          return;
+        }
+
+        els.historyList.innerHTML = app.history.map(item => {
+          const cls = item.result === "X" ? "x" : item.result === "O" ? "o" : "d";
+          const label = item.type === "series"
+            ? t("historySeriesWin", { player: item.winnerName })
+            : item.result === "draw"
+              ? t("drawLabel")
+              : t("historyRoundWin", { player: item.winnerName });
+
+          return `
+            <div class="history-item">
+              <div>
+                <div class="history-result ${cls}">${label}</div>
+                <div class="history-meta">
+                  ${item.createdAt}<br>
+                  ${item.mode === "ai" ? t("vsAi") : t("vsP2")} · ${item.difficulty} · ${item.symbols} · ${item.timer ? item.timer + "s" : noTimerLabel()} · ${item.type}<br>
+                  ${t("roundShort")} ${item.round} / ${t("bestOf")} ${item.series} · ${t("start")} ${item.starter} · ${t("moves")} ${item.moves} · ${t("end")} ${item.reason}
+                </div>
+              </div>
+              <div class="history-meta" style="text-align:right">
+                ${t("score")}<br>
+                ${item.scoreX} / ${item.scoreO} / ${item.scoreD}
+              </div>
+            </div>
+          `;
+        }).join("");
+      }
+
+      function showRoundModal(winner, reason) {
+        els.resultModalBox.classList.remove("large");
+        els.modalDynamic.innerHTML = `
+          <div class="modal-emoji">${winner === "X" ? "🎉" : (app.settings.mode === "ai" ? "🤖" : "🎊")}</div>
+          <div class="modal-title">${t("roundWinnerModal", { player: playerName(winner) })}</div>
+          <div class="modal-sub">${t("finalLabel")}: ${endReasonLabel(reason)}.</div>
+        `;
+        els.modalContinueBtn.textContent = t("nextRound");
+        openModal();
+      }
+
+      function showDrawModal() {
+        els.resultModalBox.classList.remove("large");
+        els.modalDynamic.innerHTML = `
+          <div class="modal-emoji">🤝</div>
+          <div class="modal-title">${t("drawModalTitle")}</div>
+          <div class="modal-sub">${t("drawModalSub")}</div>
+        `;
+        els.modalContinueBtn.textContent = t("continue");
+        openModal();
+      }
+
+      function showSeriesModal(winner) {
+        els.resultModalBox.classList.add("large");
+        els.modalDynamic.innerHTML = `
+          <div class="trophy">🏆</div>
+          <div class="modal-title">${t("seriesWon", { player: playerName(winner) })}</div>
+          <div class="modal-sub">
+            ${t("scoreFinal")}: ${app.match.scores.X} - ${app.match.scores.O}, ${t("draws").toLowerCase()} ${app.match.scores.draw}.<br><br>
+            ${t("settingsLabel")}: ${configText()}
+          </div>
+        `;
+        els.modalContinueBtn.textContent = t("replaySame");
+        openModal();
+      }
+
+      function openModal() {
+        els.resultModal.classList.add("show");
+        els.resultModal.setAttribute("aria-hidden", "false");
+      }
+
+      function closeModal() {
+        els.resultModal.classList.remove("show");
+        els.resultModal.setAttribute("aria-hidden", "true");
+      }
+
+      function spawnConfetti(color) {
+        const colors = [
+          color,
+          "#fff",
+          "#ffd166",
+          getComputedStyle(document.body).getPropertyValue('--accent').trim(),
+          getComputedStyle(document.body).getPropertyValue('--accent-2').trim()
+        ];
+        for (let i = 0; i < 24; i++) {
+          const dot = document.createElement("div");
+          dot.className = "confetti";
+          dot.style.left = `${20 + Math.random() * 60}vw`;
+          dot.style.top = `${12 + Math.random() * 22}vh`;
+          dot.style.background = colors[Math.floor(Math.random() * colors.length)];
+          dot.style.borderRadius = Math.random() > .5 ? "50%" : "3px";
+          dot.style.animationDuration = `${0.9 + Math.random() * .5}s`;
+          dot.style.animationDelay = `${Math.random() * .25}s`;
+          document.body.appendChild(dot);
+          setTimeout(() => dot.remove(), 1600);
+        }
+      }
+
+      function cycleTheme() {
+        const index = THEMES.indexOf(app.settings.theme);
+        const next = THEMES[(index + 1) % THEMES.length];
+        setTheme(next);
+        syncSettingsUI();
+      }
+
+      function handleBoardKeydown(e) {
+        const current = document.activeElement;
+        if (!current || !current.classList.contains("cell")) return;
+
+        const i = Number(current.dataset.idx);
+        let next = null;
+
+        if (e.key === "ArrowRight") next = i + 1;
+        if (e.key === "ArrowLeft") next = i - 1;
+        if (e.key === "ArrowDown") next = i + 3;
+        if (e.key === "ArrowUp") next = i - 3;
+
+        if (next !== null) {
+          e.preventDefault();
+          if (next >= 0 && next < 9) els.cells[next].focus();
+        }
+
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          clickCell(i);
+        }
+      }
+
+      function clickCell(index) {
+        if (!app.match.active) return;
+        if (isAiTurn()) return;
+        applyMove(index, app.match.turn, "normal");
+      }
+
+      function showHint() {
+        if (!canUseHint()) return;
+        const hint = getHintMove();
+        if (hint === null || hint === undefined) return;
+        app.match.hintCell = hint;
+        app.match.hintsUsed++;
+        app.globalStats.hintsUsed++;
+        saveGlobalStats();
+        renderBoard();
+        sfxHint();
+        setStatus(t("suggestion", { cell: hint + 1 }), "success");
+        announce(t("suggestionA11y", { cell: hint + 1 }));
+      }
+
+      function bindHoverPreviews() {
+        els.cells.forEach(cell => {
+          cell.addEventListener("mouseenter", () => {
+            if (!app.match.active || app.match.board[Number(cell.dataset.idx)] !== null || isAiTurn()) return;
+            cell.classList.add(app.match.turn === "X" ? "preview-x" : "preview-o");
+          });
+        });
+      }
+
+      function bind() {
+        document.addEventListener("click", resumeAudio, { once: true });
+
+        els.languageSelect.addEventListener("change", e => {
+          app.settings.lang = e.target.value;
+          saveSettings();
+          syncSettingsUI();
+        });
+
+        els.modeBtns.forEach(btn => btn.addEventListener("click", () => {
+          app.settings.mode = btn.dataset.value;
+          saveSettings();
+          syncSettingsUI();
+        }));
+
+        els.soundBtns.forEach(btn => btn.addEventListener("click", () => {
+          app.settings.soundEnabled = btn.dataset.value === "on";
+          saveSettings();
+          syncSettingsUI();
+        }));
+
+        els.difficultySelect.addEventListener("change", e => { app.settings.difficulty = e.target.value; saveSettings(); updatePreview(); });
+        els.symbolSelect.addEventListener("change", e => { app.settings.symbols = e.target.value; saveSettings(); updatePreview(); });
+        els.timerSelect.addEventListener("change", e => { app.settings.timerMax = Number(e.target.value); saveSettings(); updatePreview(); });
+        els.timeoutSelect.addEventListener("change", e => { app.settings.timeoutBehavior = e.target.value; saveSettings(); updatePreview(); });
+        els.starterSelect.addEventListener("change", e => { app.settings.starter = e.target.value; saveSettings(); updatePreview(); });
+        els.seriesSelect.addEventListener("change", e => { app.settings.seriesLength = Number(e.target.value); saveSettings(); updatePreview(); });
+        els.themeSelect.addEventListener("change", e => { setTheme(e.target.value); updatePreview(); });
+
+        els.player1Input.addEventListener("input", e => {
+          app.settings.player1Name = e.target.value;
+          saveSettings();
+          updatePreview();
+        });
+
+        els.player2Input.addEventListener("input", e => {
+          app.settings.player2Name = e.target.value;
+          saveSettings();
+          updatePreview();
+        });
+
+        els.previewThemeBtn.addEventListener("click", cycleTheme);
+        els.startGameBtn.addEventListener("click", startMatch);
+
+        els.soundBtn.addEventListener("click", () => {
+          app.settings.soundEnabled = !app.settings.soundEnabled;
+          saveSettings();
+          syncSettingsUI();
+        });
+
+        els.themeBtn.addEventListener("click", cycleTheme);
+
+        els.historyBtn.addEventListener("click", () => {
+          stopTimer();
+          renderHistory();
+          showScreen("history");
+        });
+
+        els.backFromHistoryBtn.addEventListener("click", () => {
+          showScreen("game");
+          if (app.match.active) startTimerIfNeeded();
+        });
+
+        els.menuBtn.addEventListener("click", () => {
+          stopTimer();
+          closeModal();
+          showScreen("start");
+          updatePreview();
+        });
+
+        els.hintBtn.addEventListener("click", showHint);
+        els.undoBtn.addEventListener("click", undoMove);
+
+        els.resetScoresBtn.addEventListener("click", () => {
+          app.match.scores = { X: 0, O: 0, draw: 0 };
+          saveScores();
+          renderBoard();
+          updatePreview();
+        });
+
+        els.newRoundBtn.addEventListener("click", nextRound);
+        els.newMatchBtn.addEventListener("click", startMatch);
+
+        els.modalMenuBtn.addEventListener("click", () => {
+          closeModal();
+          stopTimer();
+          showScreen("start");
+          updatePreview();
+        });
+
+        els.modalContinueBtn.addEventListener("click", () => {
+          if (app.match.matchOver || seriesDecided()) startMatch();
+          else nextRound();
+        });
+
+        els.clearHistoryBtn.addEventListener("click", () => {
+          app.history = [];
+          saveHistory();
+          renderHistory();
+          updatePreview();
+        });
+
+        els.cells.forEach(cell => {
+          cell.addEventListener("click", () => clickCell(Number(cell.dataset.idx)));
+        });
+
+        bindHoverPreviews();
+        els.board.addEventListener("keydown", handleBoardKeydown);
+
+        document.addEventListener("visibilitychange", () => {
+          if (document.hidden) {
+            if (app.match.active && app.timerId) {
+              stopTimer();
+              app.pausedByVisibility = true;
+              setStatus(t("paused"), "warn");
+            }
+          } else if (app.pausedByVisibility) {
+            app.pausedByVisibility = false;
+            if (app.match.active) {
+              setStatus(t("resumed", { player: playerName(app.match.turn) }), app.match.turn === "X" ? "x" : "o");
+              startTimerIfNeeded();
+            }
+          }
+        });
+      }
+
+      function init() {
+        setTheme(app.settings.theme);
+        applyTranslations();
+        syncSettingsUI();
+        bind();
+        setStatus(t("ready"), "muted");
+        setTimeout(() => showScreen("start"), 1000);
+      }
+
+      init();
+    })();
+  </script>
+</body>
+</html>
