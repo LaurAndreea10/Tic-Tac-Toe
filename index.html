@@ -971,6 +971,11 @@
     .rules { line-height:1.6; color:var(--text); }
     .cell.win::before { content:'✓'; position:absolute; top:2px; right:5px; font-size:14px; }
     @media(max-width:380px) { .board {gap:6px} .board-shell {padding:4px} .main {padding:12px} }
+    .cell.hint-path { outline:2px dashed var(--warning); outline-offset:-5px; }
+    .calendar-grid {display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}
+    .calendar-day {border:1px solid var(--border);padding:6px;text-align:center;border-radius:8px;font-size:.8rem}
+    .calendar-day.solved {border:2px solid var(--success)}
+    @media(max-width:420px) { .board-area{min-width:0} .cell{border-radius:12px} .extension{padding:10px} }
   </style>
 </head>
 <body data-theme="dark">
@@ -1168,6 +1173,12 @@
       <label for="puzzleDifficulty" id="puzzleDifficultyLabel">Dificultate puzzle</label>
       <select id="puzzleDifficulty"><option value="easy">Ușor / Easy</option><option value="medium">Mediu / Medium</option><option value="hard">Greu / Hard</option></select>
       <p id="dailyProgress" role="status"></p>
+      <details><summary id="calendarTitle">Calendar puzzle-uri</summary><div id="puzzleCalendar" class="rules"></div></details>
+      <details><summary id="championSetupTitle">Personalizează campionatul</summary>
+        <label id="championXLabel" for="championX">Jucător X</label><input id="championX" maxlength="16" />
+        <label id="championOLabel" for="championO">Jucător O</label><input id="championO" maxlength="16" />
+        <p id="championRules"></p><p id="localRanking" class="rules"></p>
+      </details>
       <div id="championshipBoard" class="rules" aria-live="polite"></div>
       <div class="option-group">
         <button class="btn btn-secondary" id="dailyPuzzle"></button>
@@ -2170,6 +2181,7 @@
         app.match.matchOver = false;
         app.match.historyStack = [];
         app.match.hintCell = null;
+        hintPath = [];
 
         els.cells.forEach((c, i) => {
           c.disabled = false;
@@ -2239,7 +2251,7 @@
         els.cells.forEach((cell, i) => {
           const v = app.match.board[i];
           cell.textContent = v ? sym[v] : "";
-          cell.classList.remove("x-mark", "o-mark", "last", "hint", "preview-x", "preview-o");
+          cell.classList.remove("x-mark", "o-mark", "last", "hint", "preview-x", "preview-o", "hint-path");
 
           cell.dataset.previewX = sym.X;
           cell.dataset.previewO = sym.O;
@@ -2248,6 +2260,7 @@
           if (v === "O") cell.classList.add("o-mark");
           if (app.match.lastMoveIndex === i) cell.classList.add("last");
           if (app.match.hintCell === i) cell.classList.add("hint");
+          if (hintPath.includes(i)) cell.classList.add("hint-path");
 
           if (!v && app.match.active && !isAiTurn()) {
             cell.classList.add(app.match.turn === "X" ? "preview-x" : "preview-o");
@@ -2283,12 +2296,14 @@
         if (!app.match.active || player !== app.match.turn || !Number.isInteger(index) || index < 0 || index >= app.match.board.length) return false;
         if (app.match.board[index] !== null) return false;
 
+        if(puzzleMode && puzzleMeta?.daily) updatePuzzleRecord(puzzleMeta.key,{attempts:1});
         if (recordHistory) pushHistorySnapshot();
 
         stopTimer();
         app.match.board[index] = player;
         app.match.lastMoveIndex = index;
         app.match.hintCell = null;
+        hintPath = [];
 
         if (player === "X") sfxMoveX();
         else sfxMoveO();
@@ -2370,7 +2385,7 @@
           puzzleMode=false; const won=type==='win' && winner==='X';
           if(line) line.forEach(i=>els.cells[i].classList.add('win'));
           if(won && puzzleMeta?.daily) {
-            dailyProgress[puzzleMeta.key]=true;
+            updatePuzzleRecord(puzzleMeta.key,{solved:true});
             try { localStorage.setItem('ttt:daily:v1',JSON.stringify(dailyProgress)); } catch {}
           }
           persistSession(); syncExtras(); renderBoard();
@@ -2806,6 +2821,10 @@
           </div>
         `;
         if(championshipState) {
+          const name=playerName(winner);const row=ranking.find(r=>r.name===name);
+          if(row)row.wins++;else ranking.push({name,wins:1});
+          ranking=ranking.slice(-50);try{localStorage.setItem('ttt:ranking:v1',JSON.stringify(ranking));}catch{}
+          renderRanking();
           const summary=document.createElement('p'); summary.textContent=$('#championshipBoard').textContent;
           els.modalDynamic.appendChild(summary);
         }
@@ -2814,13 +2833,17 @@
       }
 
       function openModal() {
+        modalReturnFocus=document.activeElement;
+        document.querySelector(".app").inert=true;
         els.resultModal.classList.add("show");
         els.resultModal.setAttribute("aria-hidden", "false");
         els.modalContinueBtn.focus();
       }
 
       function closeModal() {
+        document.querySelector(".app").inert=false;
         els.resultModal.classList.remove("show");
+        if(modalReturnFocus?.isConnected) modalReturnFocus.focus();
         els.resultModal.setAttribute("aria-hidden", "true");
       }
 
@@ -2888,12 +2911,15 @@
         const hint = getHintMove();
         if (hint === null || hint === undefined) return;
         app.match.hintCell = hint;
+        hintPath = findHintPath(app.match.board, app.match.turn, hint, app.settings.boardSize, app.settings.winLength);
+        if(puzzleMeta?.daily) updatePuzzleRecord(puzzleMeta.key,{hints:1});
         app.match.hintsUsed++;
         app.globalStats.hintsUsed++;
         saveGlobalStats();
         renderBoard();
         sfxHint();
         setStatus(t("suggestion", { cell: hint + 1 }), "success");
+        persistSession();
         const explanation = hintExplanation(hint);
         extraMessage(explanation);
         announce(t("suggestionA11y", { cell: hint + 1 }) + ' ' + explanation);
@@ -3046,9 +3072,13 @@
 
       let puzzleMode = false;
       let puzzleMeta = null;
+      let hintPath = [];
+      let modalReturnFocus = null;
+      let ranking = [];
+      try { const saved=JSON.parse(localStorage.getItem("ttt:ranking:v1")); if(Array.isArray(saved)) ranking=saved.filter(r=>r && typeof r.name==='string' && Number.isSafeInteger(r.wins) && r.wins>=0).slice(0,50); } catch {}
       let championshipState = null;
       let dailyProgress = {};
-      try { dailyProgress = JSON.parse(localStorage.getItem('ttt:daily:v1')) || {}; } catch {}
+      try { const saved=JSON.parse(localStorage.getItem('ttt:daily:v1')); if(saved && typeof saved==='object' && !Array.isArray(saved))dailyProgress=saved; } catch {}
       function dateKey() { const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
       function seededRandom(seed) { let state=seed>>>0; return () => { state=(Math.imul(1664525,state)+1013904223)>>>0; return state/4294967296; }; }
       function generatePuzzle(seed, difficulty='medium') {
@@ -3078,9 +3108,9 @@
       function extraMessage(message) { $('#extraStatus').textContent = message; }
       function syncExtras() {
         $('#puzzleDifficultyLabel').textContent=bilingual('Dificultate puzzle','Puzzle difficulty');
-        const solved=Object.keys(dailyProgress).filter(k=>/^\d{4}-\d{2}-\d{2}:/.test(k)).length;
+        const solved=Object.keys(dailyProgress).filter(k=>/^\d{4}-\d{2}-\d{2}:/.test(k) && (dailyProgress[k]===true || dailyProgress[k]?.solved===true)).length;
         $('#dailyProgress').textContent=bilingual(`Provocări zilnice rezolvate: ${solved}`, `Daily challenges solved: ${solved}`);
-        renderChampionship();
+        renderChampionship(); renderCalendar(); renderRanking();
         $('#rulesText').textContent = bilingual(`Aliniază ${app.settings.winLength} simboluri pe tabla ${app.settings.boardSize}×${app.settings.boardSize}.`, `Align ${app.settings.winLength} marks on the ${app.settings.boardSize}×${app.settings.boardSize} board.`);
         const labels = {
           tutorialTitle:['Despre joc','How to play'], contrastToggle:['Contrast ridicat','High contrast'],
@@ -3142,6 +3172,41 @@
         syncSettingsUI(); renderBoard(); updateTurnUI(); persistSession();
         extraMessage(bilingual(`${daily?'Puzzle zilnic '+date:'Puzzle'} · ${difficulty}: X câștigă într-o mutare.`, `${daily?'Daily puzzle '+date:'Puzzle'} · ${difficulty}: X wins in one move.`));
       }
+      function findHintPath(board, player, index, n, g) {
+        const other=player==='X'?'O':'X', lines=winningSegments(n,g).filter(l=>l.includes(index));
+        for(const mark of [player,other]) {
+          const line=lines.find(l=>l.every(i=>i===index || board[i]===mark));
+          if(line) return line;
+        }
+        return lines.filter(l=>!l.some(i=>board[i]===other)).sort((a,b)=>b.filter(i=>board[i]===player).length-a.filter(i=>board[i]===player).length)[0] || [index];
+      }
+      function updatePuzzleRecord(key, change) {
+        const old=dailyProgress[key], record=old===true?{solved:true,attempts:0,hints:0}:old && typeof old==='object'?old:{solved:false,attempts:0,hints:0};
+        dailyProgress[key]={solved:record.solved===true || change.solved===true,attempts:Math.min(100000,(Number.isSafeInteger(record.attempts)?record.attempts:0)+(change.attempts||0)),hints:Math.min(100000,(Number.isSafeInteger(record.hints)?record.hints:0)+(change.hints||0))};
+        try {localStorage.setItem('ttt:daily:v1',JSON.stringify(dailyProgress));}catch{}
+        renderCalendar();
+      }
+      function renderCalendar() {
+        const now=new Date(), year=now.getFullYear(),month=now.getMonth();
+        $('#calendarTitle').textContent=bilingual('Calendar puzzle-uri','Puzzle calendar');
+        const days=new Date(year,month+1,0).getDate();
+        $('#puzzleCalendar').replaceChildren();const grid=document.createElement('div');grid.className='calendar-grid';
+        for(let day=1;day<=days;day++) {
+          const date=`${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+          const records=['easy','medium','hard'].map(d=>dailyProgress[date+':'+d]).filter(Boolean);
+          const solved=records.filter(r=>r===true || r.solved===true).length;
+          const attempts=records.reduce((sum,r)=>sum+(r.attempts||0),0),hints=records.reduce((sum,r)=>sum+(r.hints||0),0);
+          const cell=document.createElement('span');cell.className='calendar-day'+(solved?' solved':'');cell.textContent=`${day}${solved?' ✓'+solved:''}`;
+          cell.setAttribute('aria-label',date+' · '+bilingual(`${solved} rezolvate, ${attempts} încercări, ${hints} indicii`,`${solved} solved, ${attempts} attempts, ${hints} hints`));cell.title=cell.getAttribute('aria-label');grid.appendChild(cell);
+        }
+        $('#puzzleCalendar').appendChild(grid);
+      }
+      function renderRanking() {
+        $('#championSetupTitle').textContent=bilingual('Personalizează campionatul','Customize championship');
+        $('#championXLabel').textContent=bilingual('Jucător X','Player X');$('#championOLabel').textContent=bilingual('Jucător O','Player O');
+        $('#championRules').textContent=bilingual('Alege tabla și pragul de victorie din meniul principal. Campionatul folosește aceste reguli, doi jucători și primul la 3 victorii.','Choose board size and winning length in the main menu. The championship uses these rules, two players and first to 3 wins.');
+        $('#localRanking').textContent=bilingual('Clasament local: ','Local ranking: ')+ranking.slice().sort((a,b)=>b.wins-a.wins).map(r=>`${r.name}: ${r.wins}`).join(' · ');
+      }
       function bindExtras() {
         document.body.classList.toggle('high-contrast', localStorage.getItem('ttt:contrast') === 'true');
         $('#contrastToggle').setAttribute('aria-pressed', String(document.body.classList.contains('high-contrast')));
@@ -3163,8 +3228,14 @@
         };
         $('#dailyPuzzle').onclick = () => launchPuzzle(true);
         $('#randomPuzzle').onclick = () => launchPuzzle(false);
-        $('#championship').onclick = () => { app.settings.seriesLength=5; saveSettings(); startMatch(); app.match.scores={X:0,O:0,draw:0}; championshipState={rounds:[]}; syncSettingsUI(); renderBoard(); persistSession(); extraMessage(bilingual('Campionat: primul la 3 victorii. Remizele nu acordă puncte.', 'Championship: first to 3 wins. Draws award no points.')); };
-        window.addEventListener('pagehide', () => { if (els.game.classList.contains('active')) persistSession(); });
+        $('#championship').onclick = () => { app.settings.mode='pvp'; app.settings.player1Name=$('#championX').value.trim().replace(/[<>]/g,''); app.settings.player2Name=$('#championO').value.trim().replace(/[<>]/g,''); app.settings.seriesLength=5; saveSettings(); startMatch(); app.match.scores={X:0,O:0,draw:0}; championshipState={rounds:[]}; syncSettingsUI(); renderBoard(); persistSession(); extraMessage(bilingual('Campionat: primul la 3 victorii. Remizele nu acordă puncte.', 'Championship: first to 3 wins. Draws award no points.')); };
+        els.resultModal.addEventListener('keydown', e=>{
+          if(e.key==='Escape'){e.preventDefault();closeModal();return;}
+          if(e.key!=='Tab')return;
+          const controls=[els.modalMenuBtn,els.modalContinueBtn];const current=controls.indexOf(document.activeElement);
+          e.preventDefault();controls[(current+(e.shiftKey?-1:1)+controls.length)%controls.length].focus();
+        });
+        window.addEventListener('pagehide' , () => { if (els.game.classList.contains('active')) persistSession(); });
         if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(()=>extraMessage(bilingual('Modul offline nu este disponibil momentan.', 'Offline mode is currently unavailable.')));
       }
 

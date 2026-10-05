@@ -1,6 +1,6 @@
 const fs=require('fs'), vm=require('vm'),assert=require('assert/strict');
 let s=fs.readFileSync('index.html','utf8').match(/<script>([\s\S]*?)<\/script>/)[1];
-s=s.replace('      init();','globalThis.api={winningSegments,getWinner,validateSession,DEFAULT_SETTINGS,DEFAULT_MATCH,boundedMove,generatePuzzle,app};');
+s=s.replace('      init();','globalThis.api={winningSegments,getWinner,validateSession,DEFAULT_SETTINGS,DEFAULT_MATCH,boundedMove,generatePuzzle,findHintPath,app};');
 const elements=new Map();function el(){return {style:{},classList:{add(){},remove(){},toggle(){},contains(){return false}},dataset:{},setAttribute(){},addEventListener(){},value:'',textContent:'',querySelectorAll(){return []}};}
 const document={querySelector(q){if(!elements.has(q))elements.set(q,el());return elements.get(q)},querySelectorAll(){return []},body:el()};
 const ctx={document,localStorage:{getItem(){return null}},console,window:{},setTimeout,clearTimeout};vm.createContext(ctx);vm.runInContext(s,ctx);const a=ctx.api;
@@ -20,3 +20,5 @@ for(const difficulty of ['easy','medium','hard'])for(let seed=1;seed<=100;seed++
  positions.add(JSON.stringify(p.board));assert.equal(JSON.stringify(p),JSON.stringify(a.generatePuzzle(seed,difficulty)));
 }
 console.log('300 seeded puzzles passed; '+positions.size+' distinct positions');
+
+assert.equal(JSON.stringify(a.findHintPath(["X","X",null,"O",null,"O",null,null,null],"X",2,3,3)),JSON.stringify([0,1,2]));

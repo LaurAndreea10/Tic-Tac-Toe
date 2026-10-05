@@ -15,3 +15,7 @@ Manual checks still required: physical mobile touch; screen reader announcement 
 Corrections in 3.1: puzzle scores isolated from matches, round ledger preserved in backups, reduced-motion confetti suppressed, winning-cell labels, old CodePen catalogue URL replaced.
 
 Live 3.1 browser check: difficulty selector and daily progress displayed; championship started at 0–0; one X move was restored with O to move and round ledger retained. Undo history intentionally resets on restore.
+
+## 3.2 verification
+
+`node test-game.cjs` passes locally, including visual-hint line selection. `test-browser.cjs` and GitHub regression workflow cover 360px mobile emulation, touch, row-aware keyboard navigation, Undo/resume, dialog Tab/Escape, language, contrast, daily persistence and offline reload. Workflow outcome must be checked separately; no physical-device or screen-reader certification is claimed.

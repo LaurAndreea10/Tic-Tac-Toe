@@ -1,0 +1,23 @@
+const {chromium}=require('playwright');
+const http=require('node:http'),fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
+const server=http.createServer((req,res)=>{const pathname=new URL(req.url,'http://localhost').pathname;const file=path.join(process.cwd(),pathname==='/'?'index.html':pathname);const types={'.html':'text/html','.js':'text/javascript','.webmanifest':'application/manifest+json','.svg':'image/svg+xml'};try{res.setHeader('Content-Type',types[path.extname(file)]||'text/plain');res.end(fs.readFileSync(file));}catch{res.statusCode=404;res.end();}});
+(async()=>{await new Promise(r=>server.listen(8765,r));const browser=await chromium.launch();try{
+ const context=await browser.newContext({viewport:{width:360,height:800},isMobile:true,hasTouch:true,reducedMotion:'reduce'});
+ const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.goto('http://localhost:8765');await page.locator('#startGameBtn').waitFor({state:'visible'});
+ await page.locator('#modeGroup [data-value="pvp"]').click();await page.selectOption('#boardSizeSelect','6');await page.selectOption('#winLengthSelect','2');await page.click('#startGameBtn');
+ assert.equal(await page.locator('#board .cell').count(),36);
+ assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'mobile overflow');
+ await page.locator('[data-idx="5"]').press('ArrowRight');assert.equal(await page.evaluate(()=>document.activeElement.dataset.idx),'5','no row wrapping');
+ await page.locator('[data-idx="0"]').tap();await page.locator('[data-idx="6"]').tap();await page.click('#undoBtn');assert.equal(await page.locator('#board .o-mark').count(),0);
+ await page.click('#resumeSaved');assert.equal(await page.locator('#board .x-mark').count(),1);assert.equal(await page.locator('#undoBtn').isEnabled(),false);
+ await page.locator('[data-idx="6"]').tap();await page.locator('[data-idx="1"]').tap();await page.locator('#resultModal.show').waitFor();
+ assert.equal(await page.evaluate(()=>document.querySelector('.app').inert),true);await page.locator('#modalContinueBtn').press('Tab');assert.equal(await page.evaluate(()=>document.activeElement.id),'modalMenuBtn');await page.locator('#modalMenuBtn').press('Escape');assert.equal(await page.evaluate(()=>document.querySelector('.app').inert),false);
+ await page.click('#menuBtn');await page.selectOption('#languageSelect','en');assert.equal(await page.locator('#calendarTitle').textContent(),'Puzzle calendar');
+ await page.click('#contrastToggle');assert.equal(await page.locator('body').getAttribute('class'),'high-contrast');
+ await page.selectOption('#puzzleDifficulty','hard');await page.click('#dailyPuzzle');await page.click('#hintBtn');assert.ok(await page.locator('#board .hint-path').count()>1);
+ const idx=await page.locator('#board .hint').getAttribute('data-idx');await page.locator(`[data-idx="${idx}"]`).tap();assert.equal(await page.locator('#extraStatus').textContent(),'Puzzle solved!');assert.match(await page.locator('#dailyProgress').textContent(),/1/);
+ await page.reload();await page.locator('#startGameBtn').waitFor({state:'visible'});assert.match(await page.locator('#dailyProgress').textContent(),/1/);
+ await page.evaluate(()=>navigator.serviceWorker.ready);await page.waitForFunction(()=>!!navigator.serviceWorker.controller);await context.setOffline(true);await page.reload();await page.locator('#startGameBtn').waitFor({state:'visible'});assert.equal(await page.title(),'Tic Tac Toe Ultimate');
+ await page.screenshot({path:'mobile-offline.png',fullPage:true});assert.deepEqual(errors,[]);console.log('Mobile emulation, touch, keyboard, undo/resume, dialog, RO/EN, contrast, daily persistence and offline passed');
+ }finally{await browser.close();server.close();}})().catch(e=>{console.error(e);server.close();process.exitCode=1});

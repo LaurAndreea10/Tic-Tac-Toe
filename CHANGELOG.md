@@ -1,5 +1,13 @@
 # Tic Tac Toe Ultimate — Version history / Istoricul versiunilor
 
+## 3.2.0 — 2026-10-05
+- Current-month puzzle calendar with completion, attempts and hints; previous boolean progress migrated on use.
+- Championship player names, configurable board rules and local champion ranking.
+- Visual hint line for immediate wins, blocking and open lines.
+- Result modal traps Tab, supports Escape and restores focus; background made inert.
+- Mobile/offline browser regression workflow and refreshed PWA cache.
+- Browser emulation is not physical-device or assistive-technology certification.
+
 ## 3.1.0 — 2026-10-05
 - Seeded puzzle generator with balanced, unfinished positions and verified winning moves; three difficulty levels.
 - Daily completions saved per date and difficulty; puzzle wins no longer alter normal match statistics.
