@@ -1,5 +1,13 @@
 # Tic Tac Toe Ultimate — Version history / Istoricul versiunilor
 
+## 3.1.0 — 2026-10-05
+- Seeded puzzle generator with balanced, unfinished positions and verified winning moves; three difficulty levels.
+- Daily completions saved per date and difficulty; puzzle wins no longer alter normal match statistics.
+- Championship round ledger and final summary; ledger included in validated session backups.
+- Winning cells announced, result focus and reduced-motion confetti fixed; offline cache refreshed.
+- Catalogue, project page, completed work and Arcade World integration updated.
+- Verification details: QA.md. Real-device touch, screen-reader operation and offline installation remain manual checks.
+
 ## 3.0.0 — 2026-10-05
 - RO/EN tutorial and explicit winning rules; high contrast and board keyboard navigation.
 - Resume saved sessions and validated JSON backup import/export; undo history resets on restore.

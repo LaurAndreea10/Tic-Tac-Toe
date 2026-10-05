@@ -1165,6 +1165,10 @@
         <button class="btn btn-secondary" id="importBackup"></button>
       </div>
       <input type="file" id="backupFile" accept="application/json,.json" hidden />
+      <label for="puzzleDifficulty" id="puzzleDifficultyLabel">Dificultate puzzle</label>
+      <select id="puzzleDifficulty"><option value="easy">Ușor / Easy</option><option value="medium">Mediu / Medium</option><option value="hard">Greu / Hard</option></select>
+      <p id="dailyProgress" role="status"></p>
+      <div id="championshipBoard" class="rules" aria-live="polite"></div>
       <div class="option-group">
         <button class="btn btn-secondary" id="dailyPuzzle"></button>
         <button class="btn btn-secondary" id="randomPuzzle"></button>
@@ -2143,7 +2147,7 @@
       function startMatch() {
         stopTimer();
         closeModal();
-        puzzleMode = false;
+        puzzleMode = false; puzzleMeta=null; championshipState=null;
         app.match = DEFAULT_MATCH();
         app.match.scores = loadScores();
         app.match.baseStarter = initialStarter();
@@ -2251,7 +2255,7 @@
           cell.disabled = false;
           cell.setAttribute("aria-disabled", String(!!v || !app.match.active || isAiTurn()));
           cell.setAttribute("aria-label",
-            v ? t("cellTaken", { n: i + 1, player: playerName(v) }) : t("cellFree", { n: i + 1 })
+            (v ? t("cellTaken", { n: i + 1, player: playerName(v) }) : t("cellFree", { n: i + 1 })) + (cell.classList.contains("win") ? bilingual(", linie câștigătoare", ", winning line") : "")
           );
         });
 
@@ -2362,10 +2366,17 @@
         app.match.active = false;
         persistSession();
         if (puzzleMode) {
-          puzzleMode = false;
-          const won = type === "win" && winner === "X";
-          extraMessage(won ? bilingual("Puzzle rezolvat!", "Puzzle solved!") : bilingual("Mai încearcă puzzle-ul.", "Try the puzzle again."));
+          puzzleMode=false; const won=type==='win' && winner==='X';
+          if(line) line.forEach(i=>els.cells[i].classList.add('win'));
+          if(won && puzzleMeta?.daily) {
+            dailyProgress[puzzleMeta.key]=true;
+            try { localStorage.setItem('ttt:daily:v1',JSON.stringify(dailyProgress)); } catch {}
+          }
+          persistSession(); syncExtras(); renderBoard();
+          extraMessage(won?bilingual('Puzzle rezolvat!','Puzzle solved!'):bilingual('Mai încearcă puzzle-ul.','Try the puzzle again.'));
+          announce($('#extraStatus').textContent); return;
         }
+        if(championshipState){championshipState.rounds.push(type==='draw'?'draw':winner);}
         app.match.endReason = endReasonLabel(reason);
         stopTimer();
 
@@ -2452,6 +2463,7 @@
         saveGlobalStats();
         renderBoard();
         updatePreview();
+        renderChampionship();
         persistSession();
         announce(type === "draw" ? t("roundEndedDrawA11y") : t("roundEndedWinA11y", { player: playerName(winner) }));
       }
@@ -2792,6 +2804,10 @@
             ${t("settingsLabel")}: ${configText()}
           </div>
         `;
+        if(championshipState) {
+          const summary=document.createElement('p'); summary.textContent=$('#championshipBoard').textContent;
+          els.modalDynamic.appendChild(summary);
+        }
         els.modalContinueBtn.textContent = t("replaySame");
         openModal();
       }
@@ -2799,6 +2815,7 @@
       function openModal() {
         els.resultModal.classList.add("show");
         els.resultModal.setAttribute("aria-hidden", "false");
+        els.modalContinueBtn.focus();
       }
 
       function closeModal() {
@@ -2807,6 +2824,7 @@
       }
 
       function spawnConfetti(color) {
+        if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
         const colors = [
           color,
           "#fff",
@@ -3026,10 +3044,42 @@
       }
 
       let puzzleMode = false;
+      let puzzleMeta = null;
+      let championshipState = null;
+      let dailyProgress = {};
+      try { dailyProgress = JSON.parse(localStorage.getItem('ttt:daily:v1')) || {}; } catch {}
+      function dateKey() { const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
+      function seededRandom(seed) { let state=seed>>>0; return () => { state=(Math.imul(1664525,state)+1013904223)>>>0; return state/4294967296; }; }
+      function generatePuzzle(seed, difficulty='medium') {
+        const random=seededRandom(seed), pool=[];
+        const marks=difficulty==='easy'?2:3;
+        for(let attempt=0;attempt<2000 && pool.length<80;attempt++) {
+          const board=Array(9).fill(null), indices=Array.from({length:9},(_,i)=>i);
+          for(let i=indices.length-1;i>0;i--){const j=Math.floor(random()*(i+1));[indices[i],indices[j]]=[indices[j],indices[i]];}
+          for(let k=0;k<marks*2;k++) board[indices[k]]=k%2===0?'X':'O';
+          if(getWinner(board,3,3)) continue;
+          const solutions=[];
+          for(let i=0;i<9;i++) if(board[i]===null){board[i]='X';if(getWinner(board,3,3)?.player==='X')solutions.push(i);board[i]=null;}
+          if(!solutions.length || (difficulty==='hard' && solutions.length!==1)) continue;
+          pool.push({board,solutions});
+        }
+        return pool[Math.floor(random()*pool.length)] || {board:['X','X',null,'O','O',null,null,null,null],solutions:[2]};
+      }
+      function renderChampionship() {
+        const box=$('#championshipBoard');
+        if(!championshipState){box.textContent='';return;}
+        const rows=championshipState.rounds.map((r,i)=>`${i+1}: ${r==='draw'?bilingual('Remiză','Draw'):r}`).join(' · ');
+        box.textContent=bilingual('Campionat · primul la 3 victorii','Championship · first to 3 wins')+` | X: ${app.match.scores.X} · O: ${app.match.scores.O} | `+rows;
+      }
+
       const SESSION_KEY = 'tttultimate:session:v1';
       function bilingual(ro, en) { return app.settings.lang === 'ro' ? ro : en; }
       function extraMessage(message) { $('#extraStatus').textContent = message; }
       function syncExtras() {
+        $('#puzzleDifficultyLabel').textContent=bilingual('Dificultate puzzle','Puzzle difficulty');
+        const solved=Object.keys(dailyProgress).filter(k=>/^\d{4}-\d{2}-\d{2}:/.test(k)).length;
+        $('#dailyProgress').textContent=bilingual(`Provocări zilnice rezolvate: ${solved}`, `Daily challenges solved: ${solved}`);
+        renderChampionship();
         $('#rulesText').textContent = bilingual(`Aliniază ${app.settings.winLength} simboluri pe tabla ${app.settings.boardSize}×${app.settings.boardSize}.`, `Align ${app.settings.winLength} marks on the ${app.settings.boardSize}×${app.settings.boardSize} board.`);
         const labels = {
           tutorialTitle:['Despre joc','How to play'], contrastToggle:['Contrast ridicat','High contrast'],
@@ -3050,7 +3100,7 @@
         return bilingual('Această celulă dezvoltă linii disponibile și controlează tabla.', 'This cell develops open lines and controls the board.');
       }
       function persistSession() {
-        try { localStorage.setItem(SESSION_KEY, JSON.stringify({version:1, settings:app.settings, match:app.match, puzzleMode})); }
+        try { localStorage.setItem(SESSION_KEY, JSON.stringify({version:1, settings:app.settings, match:app.match, puzzleMode, puzzleMeta, championshipState})); }
         catch { extraMessage(bilingual('Salvarea locală nu este disponibilă.', 'Local saving is unavailable.')); }
       }
       function validateSession(value) {
@@ -3065,12 +3115,14 @@
         if (!m.scores || !['X','O','draw'].every(k => Number.isSafeInteger(m.scores[k]) && m.scores[k]>=0 && m.scores[k]<=1000000)) throw new Error('Invalid scores');
         for (const k of ['round','hintsUsed','undosUsed']) if (!Number.isSafeInteger(m[k]) || m[k]<0 || m[k]>1000000) throw new Error('Invalid counter');
         if (m.round < 1 || (m.active && (getWinner(m.board,s.boardSize,s.winLength) || !m.board.includes(null)))) throw new Error('Invalid active match');
-        const normalized = {...DEFAULT_MATCH(), board:[...m.board], turn:m.turn, active:m.active, round:m.round, baseStarter:m.baseStarter, currentStarter:m.currentStarter, scores:{...m.scores}, hintsUsed:m.hintsUsed, undosUsed:m.undosUsed};
-        return {settings:{...DEFAULT_SETTINGS,...Object.fromEntries(Object.keys(DEFAULT_SETTINGS).map(k=>[k,s[k]]))}, match:normalized, puzzleMode:value.puzzleMode === true};
+        const normalized = {...DEFAULT_MATCH(), board:[...m.board], turn:m.turn, active:m.active, round:m.round, baseStarter:m.baseStarter, currentStarter:m.currentStarter, scores:{...m.scores}, matchOver:!m.active && (m.scores.X>=Math.ceil(s.seriesLength/2)||m.scores.O>=Math.ceil(s.seriesLength/2)), hintsUsed:m.hintsUsed, undosUsed:m.undosUsed};
+        return {settings:{...DEFAULT_SETTINGS,...Object.fromEntries(Object.keys(DEFAULT_SETTINGS).map(k=>[k,s[k]]))}, match:normalized, puzzleMode:value.puzzleMode === true,
+          puzzleMeta:value.puzzleMeta && typeof value.puzzleMeta.key==='string' && /^\d{4}-\d{2}-\d{2}:(easy|medium|hard)$/.test(value.puzzleMeta.key) ? {key:value.puzzleMeta.key,daily:value.puzzleMeta.daily===true}:null,
+          championshipState:value.championshipState && Array.isArray(value.championshipState.rounds) && value.championshipState.rounds.length<=1000 && value.championshipState.rounds.every(r=>['X','O','draw'].includes(r)) ? {rounds:[...value.championshipState.rounds]}:null};
       }
       function restoreSession(value) {
         const valid = validateSession(value);
-        stopTimer(); closeModal(); app.settings = valid.settings; app.match = valid.match; puzzleMode = valid.puzzleMode;
+        stopTimer(); closeModal(); app.settings = valid.settings; app.match = valid.match; puzzleMode = valid.puzzleMode; puzzleMeta=valid.puzzleMeta; championshipState=valid.championshipState;
         saveSettings(); setTheme(app.settings.theme); rebuildBoard(); syncSettingsUI(); showScreen('game');
         const win = getWinner(app.match.board);
         if (win) win.line.forEach(i => els.cells[i].classList.add('win'));
@@ -3078,14 +3130,15 @@
         persistSession(); extraMessage(bilingual('Partida a fost restaurată. Undo începe de la această poziție.', 'Game restored. Undo starts from this position.'));
       }
       function launchPuzzle(daily) {
-        const date = new Date().toLocaleDateString('en-CA');
-        const seed = daily ? [...date].reduce((a,c)=>a+c.charCodeAt(0),0) : Math.floor(Math.random()*1000);
-        app.settings.boardSize=3; app.settings.winLength=3; app.settings.mode='pvp'; app.settings.timerMax=0;
-        saveSettings(); startMatch(); puzzleMode=true;
-        const positions = [ ['X','X',null,'O','O',null,null,null,null], ['X','O',null,'X','O',null,null,null,null], ['X','O',null,'O','X',null,null,null,null] ];
-        app.match.board=[...positions[seed % positions.length]]; app.match.turn='X';
+        const date=dateKey(), difficulty=$('#puzzleDifficulty').value;
+        const key=date+':'+difficulty;
+        const seed=daily?[...key].reduce((a,c)=>Math.imul(a,31)+c.charCodeAt(0),0)>>>0:Math.floor(Math.random()*4294967296);
+        const puzzle=generatePuzzle(seed,difficulty);
+        app.settings.boardSize=3; app.settings.winLength=3; app.settings.mode='pvp'; app.settings.timerMax=0; app.settings.symbols='XO';
+        saveSettings(); startMatch(); puzzleMode=true; puzzleMeta={key,daily};
+        app.match.board=[...puzzle.board]; app.match.turn='X'; app.match.scores={X:0,O:0,draw:0};
         syncSettingsUI(); renderBoard(); updateTurnUI(); persistSession();
-        extraMessage(bilingual(`${daily ? 'Puzzle zilnic '+date : 'Puzzle'}: X câștigă într-o mutare.`, `${daily ? 'Daily puzzle '+date : 'Puzzle'}: X wins in one move.`));
+        extraMessage(bilingual(`${daily?'Puzzle zilnic '+date:'Puzzle'} · ${difficulty}: X câștigă într-o mutare.`, `${daily?'Daily puzzle '+date:'Puzzle'} · ${difficulty}: X wins in one move.`));
       }
       function bindExtras() {
         document.body.classList.toggle('high-contrast', localStorage.getItem('ttt:contrast') === 'true');
@@ -3108,7 +3161,7 @@
         };
         $('#dailyPuzzle').onclick = () => launchPuzzle(true);
         $('#randomPuzzle').onclick = () => launchPuzzle(false);
-        $('#championship').onclick = () => { app.settings.seriesLength=5; saveSettings(); startMatch(); app.match.scores={X:0,O:0,draw:0}; renderBoard(); persistSession(); extraMessage(bilingual('Campionat: primul la 3 victorii. Remizele nu acordă puncte.', 'Championship: first to 3 wins. Draws award no points.')); };
+        $('#championship').onclick = () => { app.settings.seriesLength=5; saveSettings(); startMatch(); app.match.scores={X:0,O:0,draw:0}; championshipState={rounds:[]}; syncSettingsUI(); renderBoard(); persistSession(); extraMessage(bilingual('Campionat: primul la 3 victorii. Remizele nu acordă puncte.', 'Championship: first to 3 wins. Draws award no points.')); };
         window.addEventListener('pagehide', () => { if (els.game.classList.contains('active')) persistSession(); });
         if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(()=>extraMessage(bilingual('Modul offline nu este disponibil momentan.', 'Offline mode is currently unavailable.')));
       }

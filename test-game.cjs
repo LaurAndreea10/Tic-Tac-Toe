@@ -1,6 +1,6 @@
 const fs=require('fs'), vm=require('vm'),assert=require('assert/strict');
 let s=fs.readFileSync('index.html','utf8').match(/<script>([\s\S]*?)<\/script>/)[1];
-s=s.replace('      init();','globalThis.api={winningSegments,getWinner,validateSession,DEFAULT_SETTINGS,DEFAULT_MATCH,boundedMove,app};');
+s=s.replace('      init();','globalThis.api={winningSegments,getWinner,validateSession,DEFAULT_SETTINGS,DEFAULT_MATCH,boundedMove,generatePuzzle,app};');
 const elements=new Map();function el(){return {style:{},classList:{add(){},remove(){},toggle(){},contains(){return false}},dataset:{},setAttribute(){},addEventListener(){},value:'',textContent:'',querySelectorAll(){return []}};}
 const document={querySelector(q){if(!elements.has(q))elements.set(q,el());return elements.get(q)},querySelectorAll(){return []},body:el()};
 const ctx={document,localStorage:{getItem(){return null}},console,window:{},setTimeout,clearTimeout};vm.createContext(ctx);vm.runInContext(s,ctx);const a=ctx.api;
@@ -10,3 +10,13 @@ for(const change of [v=>v.match.scores=null,v=>v.match.board=['X'],v=>v.settings
 a.app.settings.boardSize=6;a.app.settings.winLength=4;a.app.match.board=Array(36).fill(null);a.app.match.board[0]='O';a.app.match.board[1]='O';a.app.match.board[2]='O';assert.equal(a.boundedMove('O'),3);
 a.app.match.board[0]='X';a.app.match.board[1]='X';a.app.match.board[2]='X';assert.equal(a.boundedMove('O'),3);
 console.log(count+' winner paths, backup validation and AI immediate win/block passed');
+
+const positions=new Set();
+for(const difficulty of ['easy','medium','hard'])for(let seed=1;seed<=100;seed++){
+ const p=a.generatePuzzle(seed,difficulty);assert.equal(a.getWinner(p.board,3,3),null);
+ assert.equal(p.board.filter(v=>v==='X').length,p.board.filter(v=>v==='O').length);
+ assert.ok(p.solutions.length);if(difficulty==='hard')assert.equal(p.solutions.length,1);
+ for(const i of p.solutions){const b=[...p.board];b[i]='X';assert.equal(a.getWinner(b,3,3).player,'X');}
+ positions.add(JSON.stringify(p.board));assert.equal(JSON.stringify(p),JSON.stringify(a.generatePuzzle(seed,difficulty)));
+}
+console.log('300 seeded puzzles passed; '+positions.size+' distinct positions');
