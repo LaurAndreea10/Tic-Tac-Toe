@@ -19,3 +19,5 @@ Live 3.1 browser check: difficulty selector and daily progress displayed; champi
 ## 3.2 verification
 
 `node test-game.cjs` passes locally, including visual-hint line selection. `test-browser.cjs` and GitHub regression workflow cover 360px mobile emulation, touch, row-aware keyboard navigation, Undo/resume, dialog Tab/Escape, language, contrast, daily persistence and offline reload. Workflow outcome must be checked separately; no physical-device or screen-reader certification is claimed.
+
+GitHub regression run 37315810492 completed successfully for commit 93c9d00a7c59dc539ecd4d677ab4bac94f0e80a8: mobile 360px, emulated touch, keyboard row boundary, Undo/resume, dialog Tab/Escape, English UI, contrast, daily completion persistence and offline reload all passed. Physical device and actual screen-reader testing remain pending.
