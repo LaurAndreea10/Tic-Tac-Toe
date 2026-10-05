@@ -1000,6 +1000,12 @@
               </div>
             </div>
 
+            <div>
+              <label class="section-label" id="boardSizeLabel" for="boardSizeSelect">Dimensiunea tablei</label>
+              <select id="boardSizeSelect"><option value="3">3×3</option><option value="4">4×4</option><option value="5">5×5</option><option value="6">6×6</option></select>
+              <label class="section-label" id="winLengthLabel" for="winLengthSelect">Simboluri consecutive pentru victorie</label>
+              <select id="winLengthSelect"></select>
+            </div>
             <div id="difficultyWrap">
               <label class="section-label" for="difficultySelect" data-i18n="aiDifficulty">Dificultate AI</label>
               <select id="difficultySelect"></select>
@@ -1546,11 +1552,7 @@
       };
 
       const THEMES = ["dark", "light", "neon", "retro"];
-      const WIN_LINES = [
-        [0,1,2],[3,4,5],[6,7,8],
-        [0,3,6],[1,4,7],[2,5,8],
-        [0,4,8],[2,4,6]
-      ];
+
 
       const STORE = {
         settings: "tttultimate:settings:v2",
@@ -1563,6 +1565,8 @@
         lang: "ro",
         mode: "ai",
         difficulty: "hard",
+        boardSize: 3,
+        winLength: 3,
         symbols: "XO",
         timerMax: 0,
         timeoutBehavior: "skip",
@@ -1709,7 +1713,10 @@
 
       function loadSettings() {
         try {
-          return { ...DEFAULT_SETTINGS, ...(JSON.parse(localStorage.getItem(STORE.settings)) || {}) };
+          const settings = { ...DEFAULT_SETTINGS, ...(JSON.parse(localStorage.getItem(STORE.settings)) || {}) };
+          settings.boardSize = [3,4,5,6].includes(settings.boardSize) ? settings.boardSize : 3;
+          settings.winLength = Number.isInteger(settings.winLength) && settings.winLength >= 2 && settings.winLength <= settings.boardSize ? settings.winLength : Math.min(3, settings.boardSize);
+          return settings;
         } catch {
           return { ...DEFAULT_SETTINGS };
         }
@@ -1764,7 +1771,8 @@
           `timeout=${s.timeoutBehavior}`,
           `starter=${s.starter}`,
           `series=${s.seriesLength}`,
-          `theme=${s.theme}`
+          `theme=${s.theme}`,
+          ...(s.boardSize === 3 && s.winLength === 3 ? [] : [`board=${s.boardSize}`, `goal=${s.winLength}`])
         ].join("|");
       }
 
@@ -1909,6 +1917,7 @@
           `timeout: ${timeoutLabel(s.timeoutBehavior)}`,
           `start: ${starterLabel(s.starter)}`,
           `best of ${s.seriesLength}`,
+          `${s.boardSize}×${s.boardSize} / ${s.winLength}`,
           s.theme
         ].join(" · ");
       }
@@ -1922,6 +1931,7 @@
 
       function syncSettingsUI() {
         applyTranslations();
+        syncBoardOptions();
 
         els.modeBtns.forEach(btn => btn.classList.toggle("active", btn.dataset.value === app.settings.mode));
         els.soundBtns.forEach(btn => btn.classList.toggle("active", (btn.dataset.value === "on") === app.settings.soundEnabled));
@@ -2022,14 +2032,47 @@
       function sfxWin(){ [523,659,784,1047].forEach((f,i)=>setTimeout(()=>playTone(f,"triangle",.16,.13), i*70)); }
       function sfxHint(){ playTone(700, "sine", .08, .05); }
 
-      function getWinner(board) {
-        for (const line of WIN_LINES) {
-          const [a,b,c] = line;
-          if (board[a] && board[a] === board[b] && board[b] === board[c]) {
-            return { player: board[a], line };
+      function winningSegments(n, g) {
+        const lines = [];
+        for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) {
+          for (const [dr, dc] of [[0,1],[1,0],[-1,1],[1,1]]) {
+            const er = r + (g - 1) * dr, ec = c + (g - 1) * dc;
+            if (er < 0 || er >= n || ec < 0 || ec >= n) continue;
+            lines.push(Array.from({length: g}, (_, k) => (r + k * dr) * n + c + k * dc));
+          }
+        }
+        return lines;
+      }
+
+      function getWinner(board, n = app.settings.boardSize, g = app.settings.winLength) {
+        for (const line of winningSegments(n, g)) {
+          const player = board[line[0]];
+          if ((player === "X" || player === "O") && line.every(i => board[i] === player)) {
+            return { player, line };
           }
         }
         return null;
+      }
+
+      function rebuildBoard() {
+        const n = app.settings.boardSize;
+        els.board.style.gridTemplateColumns = `repeat(${n}, var(--cell-size))`;
+        els.board.style.setProperty('--cell-size', `clamp(44px, ${(70 / n).toFixed(2)}vw, ${Math.floor(288 / n)}px)`);
+        els.board.innerHTML = Array.from({length: n * n}, (_, i) =>
+          `<button type="button" class="cell" data-idx="${i}"></button>`).join('');
+        els.cells = [...els.board.querySelectorAll('.cell')];
+        els.cells.forEach(cell => cell.addEventListener('click', () => clickCell(Number(cell.dataset.idx))));
+        bindHoverPreviews();
+      }
+
+      function syncBoardOptions() {
+        const ro = app.settings.lang === 'ro';
+        $('#boardSizeLabel').textContent = ro ? 'Dimensiunea tablei' : 'Board size';
+        $('#winLengthLabel').textContent = ro ? 'Simboluri consecutive pentru victorie' : 'Consecutive marks to win';
+        $('#boardSizeSelect').value = app.settings.boardSize;
+        $('#winLengthSelect').innerHTML = Array.from({length: app.settings.boardSize - 1}, (_, i) =>
+          `<option value="${i + 2}">${i + 2}</option>`).join('');
+        $('#winLengthSelect').value = app.settings.winLength;
       }
 
       function emptyCells(board = app.match.board) {
@@ -2077,7 +2120,8 @@
       }
 
       function resetRound(starter) {
-        app.match.board = Array(9).fill(null);
+        app.match.board = Array(app.settings.boardSize ** 2).fill(null);
+        rebuildBoard();
         app.match.active = true;
         app.match.turn = starter;
         app.match.currentStarter = starter;
@@ -2407,11 +2451,13 @@
           }
           app.match.board[idx] = null;
         }
+        if (app.settings.boardSize > 3) return boundedMove(app.match.turn);
         const prefs = [4,0,2,6,8,1,3,5,7];
         return prefs.find(i => empties.includes(i)) ?? empties[0];
       }
 
       function strategicHumanMove() {
+        if (app.settings.boardSize > 3) return boundedMove("O");
         const empties = emptyCells();
 
         for (const idx of empties) {
@@ -2438,11 +2484,35 @@
         return randomChoice(empties);
       }
 
+      function boundedMove(player) {
+        const board = app.match.board, opponent = player === 'X' ? 'O' : 'X';
+        const empties = emptyCells(), lines = winningSegments(app.settings.boardSize, app.settings.winLength);
+        for (const mark of [player, opponent]) for (const i of empties) {
+          board[i] = mark;
+          const win = getWinner(board);
+          board[i] = null;
+          if (win) return i;
+        }
+        let best = -Infinity, move = empties[0];
+        for (const i of empties) {
+          let score = 0;
+          for (const line of lines) if (line.includes(i)) {
+            const own = line.filter(j => board[j] === player).length;
+            const other = line.filter(j => board[j] === opponent).length;
+            if (!other) score += 4 ** own;
+            if (!own) score += 3 ** other;
+          }
+          if (score > best) { best = score; move = i; }
+        }
+        return move;
+      }
+
       function bestMove() {
         return bestMoveFor("O");
       }
 
       function bestMoveFor(player) {
+        if (app.settings.boardSize > 3) return boundedMove(player);
         let bestScore = -Infinity;
         let bestIndex = null;
         const opponent = player === "X" ? "O" : "X";
@@ -2491,8 +2561,9 @@
 
       function maybeAiMove() {
         if (!isAiTurn()) return;
+        const scheduledBoard = app.match.board;
         setTimeout(() => {
-          if (!isAiTurn()) return;
+          if (!isAiTurn() || app.match.board !== scheduledBoard || !els.game.classList.contains("active")) return;
           const move = chooseAiMove();
           if (move !== null) applyMove(move, "O", "normal");
         }, window.innerWidth < 680 ? 300 : 450);
@@ -2582,6 +2653,8 @@
           mode: app.settings.mode,
           difficulty: app.settings.mode === "ai" ? app.settings.difficulty : "-",
           symbols: `${sym.X}/${sym.O}`,
+          boardSize: app.settings.boardSize,
+          winLength: app.settings.winLength,
           timer: app.settings.timerMax,
           timeout: timeoutLabel(app.settings.timeoutBehavior),
           round: app.match.round,
@@ -2619,7 +2692,7 @@
               <div>
                 <div class="history-result ${cls}">${label}</div>
                 <div class="history-meta">
-                  ${item.createdAt}<br>
+                  ${item.createdAt} · ${item.boardSize || 3}×${item.boardSize || 3} / ${item.winLength || 3}<br>
                   ${item.mode === "ai" ? t("vsAi") : t("vsP2")} · ${item.difficulty} · ${item.symbols} · ${item.timer ? item.timer + "s" : noTimerLabel()} · ${item.type}<br>
                   ${t("roundShort")} ${item.round} / ${t("bestOf")} ${item.series} · ${t("start")} ${item.starter} · ${t("moves")} ${item.moves} · ${t("end")} ${item.reason}
                 </div>
@@ -2717,12 +2790,12 @@
 
         if (e.key === "ArrowRight") next = i + 1;
         if (e.key === "ArrowLeft") next = i - 1;
-        if (e.key === "ArrowDown") next = i + 3;
-        if (e.key === "ArrowUp") next = i - 3;
+        if (e.key === "ArrowDown") next = i + app.settings.boardSize;
+        if (e.key === "ArrowUp") next = i - app.settings.boardSize;
 
         if (next !== null) {
           e.preventDefault();
-          if (next >= 0 && next < 9) els.cells[next].focus();
+          if (next >= 0 && next < els.cells.length) els.cells[next].focus();
         }
 
         if (e.key === "Enter" || e.key === " ") {
@@ -2762,6 +2835,16 @@
 
       function bind() {
         document.addEventListener("click", resumeAudio, { once: true });
+
+        $('#boardSizeSelect').addEventListener('change', e => {
+          app.settings.boardSize = Number(e.target.value);
+          app.settings.winLength = Math.min(app.settings.winLength, app.settings.boardSize);
+          saveSettings(); syncBoardOptions(); updatePreview();
+        });
+        $('#winLengthSelect').addEventListener('change', e => {
+          app.settings.winLength = Number(e.target.value);
+          saveSettings(); updatePreview();
+        });
 
         els.languageSelect.addEventListener("change", e => {
           app.settings.lang = e.target.value;
@@ -2900,3 +2983,4 @@
   </script>
 </body>
 </html>
+
