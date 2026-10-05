@@ -13,3 +13,5 @@ Live browser check on 3.0: daily puzzle launches and a winning move is accepted 
 Manual checks still required: physical mobile touch; screen reader announcement and modal navigation; offline service-worker installation/update and JSON file selection/export; full timer/Undo/series regression. No Lighthouse scores or real-device results are claimed.
 
 Corrections in 3.1: puzzle scores isolated from matches, round ledger preserved in backups, reduced-motion confetti suppressed, winning-cell labels, old CodePen catalogue URL replaced.
+
+Live 3.1 browser check: difficulty selector and daily progress displayed; championship started at 0–0; one X move was restored with O to move and round ledger retained. Undo history intentionally resets on restore.
