@@ -2452,6 +2452,7 @@
         saveGlobalStats();
         renderBoard();
         updatePreview();
+        persistSession();
         announce(type === "draw" ? t("roundEndedDrawA11y") : t("roundEndedWinA11y", { player: playerName(winner) }));
       }
 
@@ -3083,7 +3084,7 @@
         saveSettings(); startMatch(); puzzleMode=true;
         const positions = [ ['X','X',null,'O','O',null,null,null,null], ['X','O',null,'X','O',null,null,null,null], ['X','O',null,'O','X',null,null,null,null] ];
         app.match.board=[...positions[seed % positions.length]]; app.match.turn='X';
-        renderBoard(); updateTurnUI(); syncBoardOptions(); syncExtras(); persistSession();
+        syncSettingsUI(); renderBoard(); updateTurnUI(); persistSession();
         extraMessage(bilingual(`${daily ? 'Puzzle zilnic '+date : 'Puzzle'}: X câștigă într-o mutare.`, `${daily ? 'Daily puzzle '+date : 'Puzzle'}: X wins in one move.`));
       }
       function bindExtras() {
