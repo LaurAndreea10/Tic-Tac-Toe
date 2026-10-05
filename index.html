@@ -6,6 +6,13 @@
     name="viewport"
     content="width=device-width, initial-scale=1, viewport-fit=cover"
   />
+  <meta name="description" content="Tic Tac Toe Ultimate: configurable boards, bilingual accessible play, daily puzzles and local championships." />
+  <meta name="theme-color" content="#0b1020" />
+  <link rel="canonical" href="https://laurandreea10.github.io/Tic-Tac-Toe/" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <meta property="og:title" content="Tic Tac Toe Ultimate" />
+  <meta property="og:description" content="Play 3×3 to 6×6, daily puzzles and local championships. RO/EN, offline." />
+  <meta property="og:url" content="https://laurandreea10.github.io/Tic-Tac-Toe/" />
   <title>Tic Tac Toe Ultimate</title>
   <style>
     :root {
@@ -956,6 +963,14 @@
         transition: none !important;
       }
     }
+    body.high-contrast { --bg:#000; --bg-2:#000; --panel:#000; --panel-2:#000; --panel-solid:#000; --text:#fff; --muted:#fff; --border:#fff; --accent:#ffff00; --accent-2:#00ffff; --x-color:#ffff00; --o-color:#00ffff; }
+    body.high-contrast .title, body.high-contrast .splash-logo { color:#fff; background:none; }
+    body.high-contrast :focus-visible { outline:3px solid #fff; }
+    .extension { margin:12px 0; display:grid; gap:10px; }
+    .extension .option-group > button { flex:1 1 130px; }
+    .rules { line-height:1.6; color:var(--text); }
+    .cell.win::before { content:'✓'; position:absolute; top:2px; right:5px; font-size:14px; }
+    @media(max-width:380px) { .board {gap:6px} .board-shell {padding:4px} .main {padding:12px} }
   </style>
 </head>
 <body data-theme="dark">
@@ -1140,6 +1155,24 @@
       </div>
     </section>
 
+    <div class="extension card" id="extraPanel">
+      <div class="rules" id="rulesText" role="status" aria-live="polite"></div>
+      <details><summary id="tutorialTitle">Despre joc</summary><p class="rules" id="tutorialText"></p></details>
+      <div class="option-group">
+        <button class="btn btn-secondary" id="contrastToggle" aria-pressed="false"></button>
+        <button class="btn btn-secondary" id="resumeSaved"></button>
+        <button class="btn btn-secondary" id="exportBackup"></button>
+        <button class="btn btn-secondary" id="importBackup"></button>
+      </div>
+      <input type="file" id="backupFile" accept="application/json,.json" hidden />
+      <div class="option-group">
+        <button class="btn btn-secondary" id="dailyPuzzle"></button>
+        <button class="btn btn-secondary" id="randomPuzzle"></button>
+        <button class="btn btn-secondary" id="championship"></button>
+      </div>
+      <p id="extraStatus" class="rules" role="status" aria-live="polite"></p>
+      <a href="CHANGELOG.md" id="changelogLink">Istoricul versiunilor</a>
+    </div>
     <section id="screenGame" class="screen">
       <div class="shell layout">
         <aside class="sidebar">
@@ -1932,6 +1965,7 @@
       function syncSettingsUI() {
         applyTranslations();
         syncBoardOptions();
+        syncExtras();
 
         els.modeBtns.forEach(btn => btn.classList.toggle("active", btn.dataset.value === app.settings.mode));
         els.soundBtns.forEach(btn => btn.classList.toggle("active", (btn.dataset.value === "on") === app.settings.soundEnabled));
@@ -2109,6 +2143,7 @@
       function startMatch() {
         stopTimer();
         closeModal();
+        puzzleMode = false;
         app.match = DEFAULT_MATCH();
         app.match.scores = loadScores();
         app.match.baseStarter = initialStarter();
@@ -2142,6 +2177,7 @@
         renderBoard();
         updateTurnUI();
         startTimerIfNeeded();
+        persistSession();
         announce(t("roundStarted", { round: app.match.round, player: playerName(starter) }));
       }
 
@@ -2212,7 +2248,8 @@
             cell.classList.add(app.match.turn === "X" ? "preview-x" : "preview-o");
           }
 
-          cell.disabled = !!v || !app.match.active || isAiTurn();
+          cell.disabled = false;
+          cell.setAttribute("aria-disabled", String(!!v || !app.match.active || isAiTurn()));
           cell.setAttribute("aria-label",
             v ? t("cellTaken", { n: i + 1, player: playerName(v) }) : t("cellFree", { n: i + 1 })
           );
@@ -2238,7 +2275,7 @@
       }
 
       function applyMove(index, player, reason = "normal", recordHistory = true) {
-        if (!app.match.active) return false;
+        if (!app.match.active || player !== app.match.turn || !Number.isInteger(index) || index < 0 || index >= app.match.board.length) return false;
         if (app.match.board[index] !== null) return false;
 
         if (recordHistory) pushHistorySnapshot();
@@ -2253,6 +2290,7 @@
 
         renderBoard();
 
+        persistSession();
         const cell = els.cells[index];
         cell.classList.add("pop");
         setTimeout(() => cell.classList.remove("pop"), 240);
@@ -2268,10 +2306,16 @@
           return true;
         }
 
+        if (puzzleMode) {
+          app.match.active = false; puzzleMode = false; persistSession(); renderBoard();
+          extraMessage(bilingual('Mutarea nu câștigă. Repornește puzzle-ul și încearcă din nou.', 'That move does not win. Restart the puzzle and try again.'));
+          return true;
+        }
         app.match.turn = player === "X" ? "O" : "X";
         updateTurnUI();
         renderBoard();
         startTimerIfNeeded();
+        persistSession();
         maybeAiMove();
         return true;
       }
@@ -2303,6 +2347,7 @@
         startTimerIfNeeded();
         setStatus(t("moveUndone"), "warn");
         announce(t("moveUndoneA11y"));
+        persistSession();
       }
 
       function restoreSnapshot(state) {
@@ -2315,6 +2360,12 @@
 
       function endRound(type, winner, line, reason) {
         app.match.active = false;
+        persistSession();
+        if (puzzleMode) {
+          puzzleMode = false;
+          const won = type === "win" && winner === "X";
+          extraMessage(won ? bilingual("Puzzle rezolvat!", "Puzzle solved!") : bilingual("Mai încearcă puzzle-ul.", "Try the puzzle again."));
+        }
         app.match.endReason = endReasonLabel(reason);
         stopTimer();
 
@@ -2495,7 +2546,8 @@
         }
         let best = -Infinity, move = empties[0];
         for (const i of empties) {
-          let score = 0;
+          const n = app.settings.boardSize;
+          let score = -0.1 * (Math.abs(Math.floor(i / n) - (n - 1) / 2) + Math.abs(i % n - (n - 1) / 2));
           for (const line of lines) if (line.includes(i)) {
             const own = line.filter(j => board[j] === player).length;
             const other = line.filter(j => board[j] === opponent).length;
@@ -2633,6 +2685,7 @@
 
         app.match.endReason = endReasonLabel("timeout-skip");
         app.match.turn = other;
+        persistSession();
         renderBoard();
         updateTurnUI();
         startTimerIfNeeded();
@@ -2788,8 +2841,8 @@
         const i = Number(current.dataset.idx);
         let next = null;
 
-        if (e.key === "ArrowRight") next = i + 1;
-        if (e.key === "ArrowLeft") next = i - 1;
+        if (e.key === "ArrowRight" && i % app.settings.boardSize < app.settings.boardSize - 1) next = i + 1;
+        if (e.key === "ArrowLeft" && i % app.settings.boardSize > 0) next = i - 1;
         if (e.key === "ArrowDown") next = i + app.settings.boardSize;
         if (e.key === "ArrowUp") next = i - app.settings.boardSize;
 
@@ -2821,7 +2874,9 @@
         renderBoard();
         sfxHint();
         setStatus(t("suggestion", { cell: hint + 1 }), "success");
-        announce(t("suggestionA11y", { cell: hint + 1 }));
+        const explanation = hintExplanation(hint);
+        extraMessage(explanation);
+        announce(t("suggestionA11y", { cell: hint + 1 }) + ' ' + explanation);
       }
 
       function bindHoverPreviews() {
@@ -2839,11 +2894,11 @@
         $('#boardSizeSelect').addEventListener('change', e => {
           app.settings.boardSize = Number(e.target.value);
           app.settings.winLength = Math.min(app.settings.winLength, app.settings.boardSize);
-          saveSettings(); syncBoardOptions(); updatePreview();
+          saveSettings(); syncBoardOptions(); syncExtras(); updatePreview();
         });
         $('#winLengthSelect').addEventListener('change', e => {
           app.settings.winLength = Number(e.target.value);
-          saveSettings(); updatePreview();
+          saveSettings(); syncExtras(); updatePreview();
         });
 
         els.languageSelect.addEventListener("change", e => {
@@ -2969,13 +3024,102 @@
         });
       }
 
+      let puzzleMode = false;
+      const SESSION_KEY = 'tttultimate:session:v1';
+      function bilingual(ro, en) { return app.settings.lang === 'ro' ? ro : en; }
+      function extraMessage(message) { $('#extraStatus').textContent = message; }
+      function syncExtras() {
+        $('#rulesText').textContent = bilingual(`Aliniază ${app.settings.winLength} simboluri pe tabla ${app.settings.boardSize}×${app.settings.boardSize}.`, `Align ${app.settings.winLength} marks on the ${app.settings.boardSize}×${app.settings.boardSize} board.`);
+        const labels = {
+          tutorialTitle:['Despre joc','How to play'], contrastToggle:['Contrast ridicat','High contrast'],
+          resumeSaved:['Reia partida salvată','Resume saved game'], exportBackup:['Exportă backup JSON','Export JSON backup'],
+          importBackup:['Importă backup JSON','Import JSON backup'], dailyPuzzle:['Puzzle zilnic','Daily puzzle'],
+          randomPuzzle:['Câștigă într-o mutare','Win in one move'], championship:['Campionat local · 5 runde','Local championship · 5 rounds'],
+          changelogLink:['Istoricul versiunilor','Version history']
+        };
+        for (const [id, values] of Object.entries(labels)) $('#'+id).textContent = bilingual(...values);
+        $('#tutorialText').textContent = bilingual('Alege dimensiunea și numărul de simboluri, apoi Start. Câștigi pe orizontală, verticală sau diagonală. Atinge o celulă sau folosește săgețile și Enter/Space. Indiciul explică mutarea. Undo revine la mutarea anterioară. Puzzle-urile cer o singură mutare câștigătoare; campionatul este primul la 3 victorii. Progresul se salvează pe acest dispozitiv. Offline funcționează după prima încărcare online.', 'Choose the board size and winning length, then Start. Win horizontally, vertically or diagonally. Tap a cell or use arrows and Enter/Space. Hints explain the move. Undo returns to the previous move. Puzzles require one winning move; championships are first to 3 wins. Progress is saved on this device. Offline works after the first online load.');
+      }
+      function hintExplanation(index) {
+        const board = app.match.board, player = app.match.turn, other = player === 'X' ? 'O' : 'X';
+        for (const mark of [player, other]) {
+          board[index] = mark; const win = getWinner(board); board[index] = null;
+          if (win) return mark === player ? bilingual('Această mutare completează linia câștigătoare.', 'This move completes a winning line.') : bilingual('Această mutare blochează o victorie imediată.', 'This move blocks an immediate win.');
+        }
+        return bilingual('Această celulă dezvoltă linii disponibile și controlează tabla.', 'This cell develops open lines and controls the board.');
+      }
+      function persistSession() {
+        try { localStorage.setItem(SESSION_KEY, JSON.stringify({version:1, settings:app.settings, match:app.match, puzzleMode})); }
+        catch { extraMessage(bilingual('Salvarea locală nu este disponibilă.', 'Local saving is unavailable.')); }
+      }
+      function validateSession(value) {
+        if (!value || value.version !== 1 || !value.settings || !value.match) throw new Error('Invalid backup');
+        const s = value.settings, m = value.match;
+        if (![3,4,5,6].includes(s.boardSize) || !Number.isInteger(s.winLength) || s.winLength < 2 || s.winLength > s.boardSize) throw new Error('Invalid rules');
+        for (const [key, values] of Object.entries({lang:['ro','en'],mode:['ai','pvp'],difficulty:['easy','medium','hard'],symbols:Object.keys(SYMBOLS),theme:THEMES,starter:['X','O','random'],timeoutBehavior:['skip','auto','loss']})) if (!values.includes(s[key])) throw new Error('Invalid settings');
+        if (![0,5,10,15,20,30,60].includes(s.timerMax) || ![1,3,5,7,9].includes(s.seriesLength) || typeof s.soundEnabled !== 'boolean') throw new Error('Invalid timing');
+        if (typeof s.player1Name !== 'string' || typeof s.player2Name !== 'string' || s.player1Name.length > 16 || s.player2Name.length > 16 || /[<>]/.test(s.player1Name+s.player2Name)) throw new Error('Invalid names');
+        if (!Array.isArray(m.board) || m.board.length !== s.boardSize ** 2 || !m.board.every(v => v === null || v === 'X' || v === 'O')) throw new Error('Invalid board');
+        if (!['X','O'].includes(m.turn) || !['X','O'].includes(m.baseStarter) || !['X','O'].includes(m.currentStarter) || typeof m.active !== 'boolean') throw new Error('Invalid match');
+        if (!m.scores || !['X','O','draw'].every(k => Number.isSafeInteger(m.scores[k]) && m.scores[k]>=0 && m.scores[k]<=1000000)) throw new Error('Invalid scores');
+        for (const k of ['round','hintsUsed','undosUsed']) if (!Number.isSafeInteger(m[k]) || m[k]<0 || m[k]>1000000) throw new Error('Invalid counter');
+        if (m.round < 1 || (m.active && (getWinner(m.board,s.boardSize,s.winLength) || !m.board.includes(null)))) throw new Error('Invalid active match');
+        const normalized = {...DEFAULT_MATCH(), board:[...m.board], turn:m.turn, active:m.active, round:m.round, baseStarter:m.baseStarter, currentStarter:m.currentStarter, scores:{...m.scores}, hintsUsed:m.hintsUsed, undosUsed:m.undosUsed};
+        return {settings:{...DEFAULT_SETTINGS,...Object.fromEntries(Object.keys(DEFAULT_SETTINGS).map(k=>[k,s[k]]))}, match:normalized, puzzleMode:value.puzzleMode === true};
+      }
+      function restoreSession(value) {
+        const valid = validateSession(value);
+        stopTimer(); closeModal(); app.settings = valid.settings; app.match = valid.match; puzzleMode = valid.puzzleMode;
+        saveSettings(); setTheme(app.settings.theme); rebuildBoard(); syncSettingsUI(); showScreen('game');
+        const win = getWinner(app.match.board);
+        if (win) win.line.forEach(i => els.cells[i].classList.add('win'));
+        if (app.match.active) { startTimerIfNeeded(); maybeAiMove(); }
+        persistSession(); extraMessage(bilingual('Partida a fost restaurată. Undo începe de la această poziție.', 'Game restored. Undo starts from this position.'));
+      }
+      function launchPuzzle(daily) {
+        const date = new Date().toLocaleDateString('en-CA');
+        const seed = daily ? [...date].reduce((a,c)=>a+c.charCodeAt(0),0) : Math.floor(Math.random()*1000);
+        app.settings.boardSize=3; app.settings.winLength=3; app.settings.mode='pvp'; app.settings.timerMax=0;
+        saveSettings(); startMatch(); puzzleMode=true;
+        const positions = [ ['X','X',null,'O','O',null,null,null,null], ['X','O',null,'X','O',null,null,null,null], ['X','O',null,'O','X',null,null,null,null] ];
+        app.match.board=[...positions[seed % positions.length]]; app.match.turn='X';
+        renderBoard(); updateTurnUI(); syncBoardOptions(); syncExtras(); persistSession();
+        extraMessage(bilingual(`${daily ? 'Puzzle zilnic '+date : 'Puzzle'}: X câștigă într-o mutare.`, `${daily ? 'Daily puzzle '+date : 'Puzzle'}: X wins in one move.`));
+      }
+      function bindExtras() {
+        document.body.classList.toggle('high-contrast', localStorage.getItem('ttt:contrast') === 'true');
+        $('#contrastToggle').setAttribute('aria-pressed', String(document.body.classList.contains('high-contrast')));
+        $('#contrastToggle').onclick = () => {
+          const enabled = document.body.classList.toggle('high-contrast');
+          $('#contrastToggle').setAttribute('aria-pressed',String(enabled)); localStorage.setItem('ttt:contrast',String(enabled));
+        };
+        $('#resumeSaved').onclick = () => { try { restoreSession(JSON.parse(localStorage.getItem(SESSION_KEY))); } catch { extraMessage(bilingual('Nu există o partidă validă salvată.', 'No valid saved game found.')); } };
+        $('#exportBackup').onclick = () => {
+          persistSession(); const blob=new Blob([localStorage.getItem(SESSION_KEY)],{type:'application/json'});
+          const url=URL.createObjectURL(blob), a=document.createElement('a'); a.href=url; a.download='tic-tac-toe-backup.json'; a.click(); setTimeout(()=>URL.revokeObjectURL(url),1000);
+        };
+        $('#importBackup').onclick = () => $('#backupFile').click();
+        $('#backupFile').onchange = async e => {
+          const file=e.target.files[0]; if (!file) return;
+          try { if(file.size>100000) throw new Error('Too large'); restoreSession(JSON.parse(await file.text())); }
+          catch { extraMessage(bilingual('Backup invalid. Partida curentă este păstrată.', 'Invalid backup. Current game is preserved.')); }
+          e.target.value='';
+        };
+        $('#dailyPuzzle').onclick = () => launchPuzzle(true);
+        $('#randomPuzzle').onclick = () => launchPuzzle(false);
+        $('#championship').onclick = () => { app.settings.seriesLength=5; saveSettings(); startMatch(); app.match.scores={X:0,O:0,draw:0}; renderBoard(); persistSession(); extraMessage(bilingual('Campionat: primul la 3 victorii. Remizele nu acordă puncte.', 'Championship: first to 3 wins. Draws award no points.')); };
+        window.addEventListener('pagehide', () => { if (els.game.classList.contains('active')) persistSession(); });
+        if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(()=>extraMessage(bilingual('Modul offline nu este disponibil momentan.', 'Offline mode is currently unavailable.')));
+      }
+
       function init() {
         setTheme(app.settings.theme);
         applyTranslations();
         syncSettingsUI();
         bind();
         setStatus(t("ready"), "muted");
-        setTimeout(() => showScreen("start"), 1000);
+        bindExtras();
+        setTimeout(() => { if (els.splash.classList.contains("active")) showScreen("start"); }, 1000);
       }
 
       init();
