@@ -2147,9 +2147,10 @@
       function startMatch() {
         stopTimer();
         closeModal();
-        puzzleMode = false; puzzleMeta=null; championshipState=null;
+        const replayChampionship = !!championshipState;
+        puzzleMode = false; puzzleMeta=null; championshipState=replayChampionship?{rounds:[]}:null;
         app.match = DEFAULT_MATCH();
-        app.match.scores = loadScores();
+        app.match.scores = replayChampionship ? {X:0,O:0,draw:0} : loadScores();
         app.match.baseStarter = initialStarter();
         app.match.round = 1;
         resetRound(roundStarter(1));
@@ -3135,6 +3136,7 @@
         const seed=daily?[...key].reduce((a,c)=>Math.imul(a,31)+c.charCodeAt(0),0)>>>0:Math.floor(Math.random()*4294967296);
         const puzzle=generatePuzzle(seed,difficulty);
         app.settings.boardSize=3; app.settings.winLength=3; app.settings.mode='pvp'; app.settings.timerMax=0; app.settings.symbols='XO';
+        championshipState=null;
         saveSettings(); startMatch(); puzzleMode=true; puzzleMeta={key,daily};
         app.match.board=[...puzzle.board]; app.match.turn='X'; app.match.scores={X:0,O:0,draw:0};
         syncSettingsUI(); renderBoard(); updateTurnUI(); persistSession();
